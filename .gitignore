@@ -227,6 +227,7 @@ models/
 checkpoints/
 
 # Data processing outputs
-processed_data/
-cleaned_data/
-transformed_data/
+*.csv
+*.tsv
+*.parquet
+*.hdf5
