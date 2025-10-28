@@ -1,0 +1,52 @@
+.viz-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.viz-container.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  font-size: 1.25rem;
+  color: #666;
+}
+
+.viz-container h2 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  color: #333;
+}
+
+.viz-description {
+  color: #666;
+  font-size: 1rem;
+  margin-bottom: 2rem;
+}
+
+.viz-placeholder {
+  background: white;
+  border-radius: 8px;
+  padding: 4rem 2rem;
+  text-align: center;
+  border: 1px solid #e0e0e0;
+  min-height: 500px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.viz-placeholder p {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.placeholder-text {
+  font-size: 1rem !important;
+  color: #999;
+  margin: 0.5rem 0;
+}
