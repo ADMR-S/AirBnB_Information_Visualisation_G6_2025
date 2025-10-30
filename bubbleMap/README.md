@@ -1,6 +1,7 @@
 Build map : 
+    Run :
+        make all
 
-RUN :
-    make build/cb_2020_us_county_20m.zip
-
-    make build/counties.json
+Clean build directory :
+    Run :
+        make clean

@@ -1,3 +1,8 @@
+all : us.json
+
+clean:
+	rm -rf -- us.json build
+
 build/cb_2020_us_county_20m.zip:
 	mkdir -p $(dir $@)
 	curl --fail -o build/cb_2020_us_county_20m.zip https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_county_20m.zip
