@@ -2,12 +2,17 @@
 <meta charset="utf-8">
 <style>
 
-path {
+.land {
+  fill: #ddd;
+}
+
+.border {
   fill: none;
-  stroke: #000;
+  stroke: #fff;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
+
 
 </style>
 <body>
@@ -29,7 +34,13 @@ d3.json("us.json", function(error, us) {
   if (error) return console.error(error);
 
   svg.append("path")
-      .datum(topojson.mesh(us))
+      .datum(topojson.feature(us, us.objects.nation))
+      .attr("class", "land")
+      .attr("d", path);
+
+  svg.append("path")
+      .datum(topojson.mesh(us, us.objects.states, function(a, b) { return a !== b; }))
+      .attr("class", "border border--state")
       .attr("d", path);
 });
 
