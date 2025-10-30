@@ -1,8 +1,9 @@
 .navigation {
-  width: 250px;
+  grid-column: 1;
   background: white;
   border-right: 1px solid #e0e0e0;
   padding: 1.5rem 0;
+  overflow-y: auto;
 }
 
 .navigation a {
