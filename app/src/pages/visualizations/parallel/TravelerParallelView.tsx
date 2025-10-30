@@ -1,3 +1,4 @@
+//@ts-ignore
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 // @ts-ignore
 import * as d3 from 'd3';
@@ -142,14 +143,14 @@ export default function TravelerParallelView() {
 
     const data: AirbnbListing[] = filteredData;
     const TARGET = Math.min(12000, Math.max(2000, Math.round(data.length * 0.05)));
-    const groups = d3.group<AirbnbListing, string>(data, (d: AirbnbListing) => d.room_type);
+    const groups = d3.group(data, (d: AirbnbListing) => d.room_type) as Map<string, AirbnbListing[]>;
     const samples: AirbnbListing[] = [];
     const total = data.length;
     availRoomTypes.forEach((rt) => {
       const group = groups.get(rt) || [];
       const proportion = group.length / Math.max(1, total);
       const k = Math.max(5, Math.round(proportion * TARGET));
-      const shuffled = d3.shuffle(group.slice());
+      const shuffled = d3.shuffle(group.slice()) as AirbnbListing[];
       for (let i = 0; i < Math.min(k, shuffled.length); i++) samples.push(shuffled[i]);
     });
 
