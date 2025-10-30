@@ -174,8 +174,6 @@ cython_debug/
 # !sample_data/
 # !**/sample*.csv
 
-# Allow CSV files in app/public folder for production deployment
-!app/public/**/*.csv
 
 # Visualization outputs
 *.png
@@ -235,3 +233,6 @@ checkpoints/
 *.parquet
 *.hdf5
 notes_rapport_bubblemap.txt
+
+# Allow CSV files in app/public folder for production deployment
+!app/public/*/*.csv
