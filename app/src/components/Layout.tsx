@@ -1,6 +1,7 @@
 import { Outlet, useNavigate } from 'react-router-dom';
 import FilterBar from './FilterBar';
 import Navigation from './Navigation';
+import FilterBreadcrumbs from './FilterBreadcrumbs';
 import './Layout.css';
 
 interface LayoutProps {
@@ -30,6 +31,7 @@ export default function Layout({ persona }: LayoutProps) {
       <div className="main-content">
         <Navigation persona={persona} />
         <main className="content">
+          <FilterBreadcrumbs />
           <Outlet />
         </main>
       </div>
