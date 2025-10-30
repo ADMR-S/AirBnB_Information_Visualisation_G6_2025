@@ -78,9 +78,6 @@ export default function FilterBar() {
     }
   }, [allData.length, availableStates.length, allData]);
 
-  useEffect(() => {
-    if (isTraveler && year !== '2023') setYear('2023');
-  }, [isTraveler, year, setYear]);
 
   const toggleItem = (items: string[], item: string, setter: (items: string[]) => void) => {
     setter(items.includes(item) ? items.filter(i => i !== item) : [...items, item]);
@@ -91,15 +88,17 @@ export default function FilterBar() {
       <div className="filter-bar-content">
         <div className="filter-bar-title">Filters</div>
 
-        <div className="filter-section">
-          <div className="filter-group">
-            <label>Year {isTraveler && <span className="locked-badge">🔒 Latest</span>}</label>
-            <select value={year} onChange={(e) => setYear(e.target.value as any)} disabled={isTraveler} className={isTraveler ? 'locked' : ''}>
-              <option value="2023">2023</option>
-              <option value="2020">2020</option>
-            </select>
+        {!isTraveler && (
+          <div className="filter-section">
+            <div className="filter-group">
+              <label>Year</label>
+              <select value={year} onChange={(e) => setYear(e.target.value as any)}>
+                <option value="2023">2023</option>
+                <option value="2020">2020</option>
+              </select>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="filter-section">
           <MultiSelect label="States" value={states} options={availableStates} onChange={(s: string) => toggleItem(states, s, setStates)} showDropdown={showStateDropdown} setShowDropdown={setShowStateDropdown} />
@@ -113,7 +112,9 @@ export default function FilterBar() {
           <RangeFilter label="Availability" range={availabilityRange} setRange={setAvailabilityRange} max="365" />
           <RangeFilter label="Minimum Nights" range={minNightsRange} setRange={setMinNightsRange} min="1" max="365" />
           <RangeFilter label="Reviews/Month" range={reviewsPerMonthRange} setRange={setReviewsPerMonthRange} max="100" step="0.1" />
-          <RangeFilter label="Host Listings" range={hostListingsRange} setRange={setHostListingsRange} min="1" max="1000" />
+          {!isTraveler && (
+            <RangeFilter label="Host Listings" range={hostListingsRange} setRange={setHostListingsRange} min="1" max="1000" />
+          )}
         </div>
 
         <button className="reset-button" onClick={resetFilters}>
