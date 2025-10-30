@@ -231,3 +231,4 @@ checkpoints/
 *.tsv
 *.parquet
 *.hdf5
+notes_rapport_bubblemap.txt
