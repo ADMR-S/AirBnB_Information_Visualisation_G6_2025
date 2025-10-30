@@ -12,7 +12,7 @@ export default function TravelerParallelView() {
   const filteredData = useFilteredData();
   const svgRef = useRef<SVGSVGElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [renderAll, setRenderAll] = useState(true);
+  const [renderAll, setRenderAll] = useState(false);
   // helper: dimensions used in the chart and stats
   const dimensions: { key: keyof AirbnbListing; label: string }[] = [
     { key: 'price', label: 'Price' },
