@@ -5,15 +5,20 @@ import { useFilterStore } from '../../../stores/useFilterStore';
 import { useFilteredData } from '../../../hooks/useFilteredData';
 import type { AirbnbListing } from '../../../types/airbnb.types';
 import '../VisualizationPage.css';
-import { sampleColors } from '../../../utils/colorScale';
+import './parallel.css';
+import { setupCanvas, clearBackingStore, computeTicks } from './parallelCommon';
 
 export default function HostParallelView() {
-  const { isLoading, year, roomTypes: activeRoomTypes, setRoomTypes } = useFilterStore();
+  const { isLoading, roomTypes: activeRoomTypes, setRoomTypes } = useFilterStore();
   const filteredData = useFilteredData();
+
   const svgRef = useRef<SVGSVGElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // toggle affichage complet vs échantillon
   const [renderAll, setRenderAll] = useState(false);
-  // helper: dimensions used for chart and stats
+
+  // dimensions utilisées (fixes ici)
   const dimensions: { key: keyof AirbnbListing; label: string }[] = [
     { key: 'price', label: 'Price' },
     { key: 'number_of_reviews', label: 'Reviews' },
@@ -22,53 +27,69 @@ export default function HostParallelView() {
     { key: 'minimum_nights', label: 'Min nights' },
     { key: 'calculated_host_listings_count', label: 'Host listings' },
   ];
-  // compute available room types from the filtered data
-  const availRoomTypes = useMemo(() => Array.from(new Set(filteredData.map(d => d.room_type))).sort(), [filteredData]);
-  // generate more distinct categorical colors: prefer Tableau/Category palettes for <=10 categories,
-  // fallback to interpolated rainbow for larger numbers
-  const colors = useMemo(() => {
-    if (availRoomTypes.length <= 10) {
-      // @ts-ignore - schemeTableau10 may be missing typings here
-      return (d3.schemeTableau10 as string[]).slice(0, availRoomTypes.length);
-    }
-    return availRoomTypes.map((_, i) => d3.interpolateRainbow(i / availRoomTypes.length));
-  }, [availRoomTypes]);
 
+  // dispos room types (utile pour la légende + couleurs du redraw)
+  const availRoomTypes = useMemo(
+    () => Array.from(new Set(filteredData.map(d => d.room_type))).sort(),
+    [filteredData]
+  );
+
+  // ---- REFS PERSISTANTS (créés une seule fois) ----
+  const setupRef = useRef<{
+    margin: { top: number; right: number; bottom: number; left: number };
+    width: number;
+    height: number;
+    x: d3.ScalePoint<string>;
+    yScales: Record<string, d3.ScaleLinear<number, number>>;
+    ctx: CanvasRenderingContext2D | null;
+  } | null>(null);
+
+  // ---------- 1) SETUP — axes + scales + canvas (UNE FOIS) ----------
   useEffect(() => {
-    if (!svgRef.current) return;
-    if (!canvasRef.current) return;
+    if (!svgRef.current || !canvasRef.current) return;
 
-    const data: AirbnbListing[] = filteredData;
-    const svgContainer = d3.select(svgRef.current);
-    svgContainer.selectAll('*').remove();
+    const svgEl = svgRef.current;
+    const canvasEl = canvasRef.current;
 
+    // mesures + marges
     const margin = { top: 30, right: 40, bottom: 20, left: 40 };
-    const width = Math.max(600, svgRef.current.clientWidth) - margin.left - margin.right;
+    const width = Math.max(600, svgEl.clientWidth) - margin.left - margin.right;
     const height = 360 - margin.top - margin.bottom;
 
-    const svg = svgContainer
+    // conteneur svg
+    const svg = d3
+      .select(svgEl)
       .attr('viewBox', `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+      .html('') // clear une seule fois au mount
       .append('g')
       .attr('transform', `translate(${margin.left},${margin.top})`);
 
-    if (!data || data.length === 0) {
-      svg.append('text').attr('x', 10).attr('y', 20).text('No data for selected filters');
-      return;
-    }
-
-    // dimensions are defined above (re-used for stats)
-
+    // scales initiales basées sur l'état courant (elles resteront stables ensuite)
     const yScales: Record<string, d3.ScaleLinear<number, number>> = {} as any;
     dimensions.forEach((dim) => {
-      const values = data.map(d => Number(d[dim.key] ?? 0));
-      const extent = d3.extent(values) as [number, number];
-      if (extent[0] === extent[1]) extent[0] = 0;
-      yScales[dim.key] = d3.scaleLinear().domain(extent).range([height, 0]).nice();
-    });
+      // collect finite numeric values only
+      const values = filteredData.map(d => Number(d[dim.key] ?? 0)).filter(v => Number.isFinite(v));
+      let extent = d3.extent(values) as [number, number];
 
+      // sanitize extent
+      if (extent[0] == null || !Number.isFinite(extent[0])) extent[0] = 0;
+      if (extent[1] == null || !Number.isFinite(extent[1])) extent[1] = extent[0] || 0;
+      if (extent[0] === extent[1]) {
+        // ensure a non-zero span
+        if (extent[0] === 0) extent[1] = 1;
+        else extent[0] = 0;
+      }
+
+      // For availability_365 we want a fixed domain [0, 365] (business constraint)
+      if (dim.key === 'availability_365') {
+        yScales[dim.key] = d3.scaleLinear().domain([0, 365]).range([height, 0]);
+      } else {
+        yScales[dim.key] = d3.scaleLinear().domain(extent).range([height, 0]).nice();
+      }
+    });
     const x = d3.scalePoint<string>().domain(dimensions.map(d => String(d.key))).range([0, width]);
 
-    // draw axes on SVG
+    // axes (ne seront PAS recréés)
     const axis = svg
       .selectAll<SVGGElement, { key: keyof AirbnbListing; label: string }>('.dimension')
       .data(dimensions)
@@ -79,7 +100,13 @@ export default function HostParallelView() {
 
     axis.append('g').each(function (this: SVGGElement, d: { key: keyof AirbnbListing; label: string }) {
       const scale = yScales[d.key];
-      d3.select(this).call(d3.axisLeft(scale).ticks(5) as any);
+      if (d.key === 'availability_365') {
+        // ensure ticks don't exceed 365: compute ticks in [0,365]
+        const ticks = computeTicks(0, 365, 5);
+        d3.select(this).call(d3.axisLeft(scale).tickValues(ticks) as any);
+      } else {
+        d3.select(this).call(d3.axisLeft(scale).ticks(5) as any);
+      }
     });
 
     axis
@@ -89,27 +116,57 @@ export default function HostParallelView() {
       .text((d: { key: keyof AirbnbListing; label: string }) => d.label)
       .style('font-size', '12px');
 
-    // prepare canvas
-    const canvas = canvasRef.current;
-    const ratio = window.devicePixelRatio || 1;
-    canvas.width = Math.round((width + margin.left + margin.right) * ratio);
-    canvas.height = Math.round((height + margin.top + margin.bottom) * ratio);
-    canvas.style.width = `${width + margin.left + margin.right}px`;
-    canvas.style.height = `${height + margin.top + margin.bottom}px`;
-    const ctx = canvas.getContext('2d');
+  // canvas (taille + contexte) — centralized helper
+  const totalWidth = width + margin.left + margin.right;
+  const totalHeight = height + margin.top + margin.bottom;
+  const { ctx } = setupCanvas(canvasEl, totalWidth, totalHeight);
+  if (!ctx) return;
+
+    // stocker le setup pour les redraws
+    setupRef.current = { margin, width, height, x, yScales, ctx };
+
+    // cleanup à l'unmount uniquement
+    return () => {
+      ctx.restore();
+      d3.select(svgEl).html('');
+      ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ⬅️ une seule fois
+
+  // ---------- 2) DRAW — clear canvas + (re)dessin des lignes ----------
+  useEffect(() => {
+    const setup = setupRef.current;
+    if (!setup || !canvasRef.current) return;
+
+    const { margin, x, yScales, ctx } = setup;
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.scale(ratio, ratio);
 
-  const colorBy = d3.scaleOrdinal<string, string>().domain(availRoomTypes).range(colors as string[]);
+    // couleurs par room type (peut changer avec les filtres)
+    const colors =
+      availRoomTypes.length <= 10
+        ? (d3.schemeTableau10 as string[]).slice(0, availRoomTypes.length)
+        : availRoomTypes.map((_, i) => d3.interpolateRainbow(i / availRoomTypes.length));
+    const colorBy = d3.scaleOrdinal<string, string>().domain(availRoomTypes).range(colors as string[]);
 
-    // Stratified sampling
+    // clear canvas (PAS de reset svg/axes)
+    const canvasEl = canvasRef.current;
+
+  // clear full backing store regardless of current transform
+  clearBackingStore(ctx, canvasEl);
+
+    // 2) on remet un état “propre” de peinture (au cas où)
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+
+
+    // sampling stratifié
+    const data: AirbnbListing[] = filteredData;
     const TARGET = Math.min(12000, Math.max(2000, Math.round(data.length * 0.05)));
     const groups = d3.group<AirbnbListing, string>(data, (d: AirbnbListing) => d.room_type);
     const samples: AirbnbListing[] = [];
     const total = data.length;
-  availRoomTypes.forEach((rt) => {
+    availRoomTypes.forEach((rt) => {
       const group = groups.get(rt) || [];
       const proportion = group.length / Math.max(1, total);
       const k = Math.max(5, Math.round(proportion * TARGET));
@@ -117,6 +174,12 @@ export default function HostParallelView() {
       for (let i = 0; i < Math.min(k, shuffled.length); i++) samples.push(shuffled[i]);
     });
 
+    // source des lignes en fonction des room types actifs + renderAll
+    const sourceLines = renderAll
+      ? (activeRoomTypes && activeRoomTypes.length > 0 ? data.filter(d => activeRoomTypes.includes(d.room_type)) : data)
+      : (activeRoomTypes && activeRoomTypes.length > 0 ? samples.filter(d => activeRoomTypes.includes(d.room_type)) : samples);
+
+    // dessin batched
     const chunkSize = 1500;
     let rafId: number | null = null;
 
@@ -145,22 +208,15 @@ export default function HostParallelView() {
       step();
     };
 
-  // initial render (apply selectedTypes filter if present)
-    // initial render (apply activeRoomTypes filter from store if present)
-  const sourceLines = renderAll
-    ? (activeRoomTypes && activeRoomTypes.length > 0 ? data.filter(d => activeRoomTypes.includes(d.room_type)) : data)
-    : (activeRoomTypes && activeRoomTypes.length > 0 ? samples.filter(d => activeRoomTypes.includes(d.room_type)) : samples);
-  renderBatched(sourceLines);
+    renderBatched(sourceLines);
 
+    // cleanup du RAF uniquement (on NE vide PAS le svg)
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
-      ctx.restore();
-      svgContainer.selectAll('*').remove();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
-  }, [filteredData, availRoomTypes, colors, activeRoomTypes, renderAll]);
+  }, [filteredData, availRoomTypes, activeRoomTypes, renderAll]); // ⬅️ redraw only
 
-  // --- Stats computation ---
+  // --- Stats (inchangées) ---
   const filteredByRoom = (activeRoomTypes && activeRoomTypes.length > 0)
     ? filteredData.filter(d => activeRoomTypes.includes(d.room_type))
     : filteredData;
@@ -193,13 +249,15 @@ export default function HostParallelView() {
 
   return (
     <div className="viz-container">
-  <h2>Performance Comparison</h2>
-  <p className="viz-description">Compare metrics across listings ({filteredData.length.toLocaleString()} properties)</p>
+      <h2>Performance Comparison</h2>
+      <p className="viz-description">Compare metrics across listings ({filteredData.length.toLocaleString()} properties)</p>
+
       <div style={{ position: 'relative', width: '100%' }}>
-        <canvas ref={canvasRef} style={{ position: 'absolute', left: 0, top: 0, zIndex: 1 }} />
-        <svg ref={svgRef} style={{ position: 'relative', zIndex: 2, width: '100%', height: 420 }} aria-label="Parallel coordinates chart" />
+        <canvas ref={canvasRef} className="parallel-canvas" />
+        <svg ref={svgRef} className="parallel-svg" aria-label="Parallel coordinates chart" />
       </div>
-  {/* Legend for room types */}
+
+      {/* Légende / contrôles */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
         <button
           onClick={() => setRenderAll(r => !r)}
@@ -227,13 +285,13 @@ export default function HostParallelView() {
             style={{ display: 'flex', alignItems: 'center', gap: 8, border: 'none', background: 'transparent', cursor: 'pointer' }}
             aria-pressed={(activeRoomTypes || []).includes(rt)}
           >
-            <div style={{ width: 14, height: 14, background: colors[i], borderRadius: 2, boxShadow: '0 0 0 1px rgba(0,0,0,0.05) inset' }} />
+            <div style={{ width: 14, height: 14, background: (d3.schemeTableau10 as string[])[i % 10], borderRadius: 2, boxShadow: '0 0 0 1px rgba(0,0,0,0.05) inset' }} />
             <div style={{ fontSize: 12 }}>{rt}</div>
           </button>
         ))}
       </div>
 
-      {/* Stats / analysis panel */}
+      {/* Stats */}
       <div style={{ marginTop: 18, padding: 12, borderRadius: 8, background: 'rgba(250,250,250,0.9)', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
         <h3 style={{ margin: '0 0 8px 0' }}>Données affichées — analyse rapide</h3>
         <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -270,13 +328,20 @@ export default function HostParallelView() {
           <div style={{ minWidth: 220 }}>
             <div style={{ fontSize: 13, marginBottom: 8 }}>Répartition par room type</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {roomCountsArr.map(([rt, c], i) => (
-                <div key={rt} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 12, height: 12, background: colors[i], borderRadius: 2 }} />
-                  <div style={{ flex: 1, fontSize: 13 }}>{rt}</div>
-                  <div style={{ fontSize: 13, color: 'rgba(0,0,0,0.65)' }}>{c.toLocaleString()} ({((c / Math.max(1, totalShown)) * 100).toFixed(1)}%)</div>
-                </div>
-              ))}
+              {Array.from(new Map(filteredByRoom.map(d => [d.room_type, 0]))).map(([rt]) => rt) /* placeholder order */ &&
+                availRoomTypes.map((rt, i) => {
+                  const c = filteredByRoom.filter(d => d.room_type === rt).length;
+                  const totalShown = filteredByRoom.length;
+                  return (
+                    <div key={rt} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 12, height: 12, background: (d3.schemeTableau10 as string[])[i % 10], borderRadius: 2 }} />
+                      <div style={{ flex: 1, fontSize: 13 }}>{rt}</div>
+                      <div style={{ fontSize: 13, color: 'rgba(0,0,0,0.65)' }}>
+                        {c.toLocaleString()} ({((c / Math.max(1, totalShown)) * 100).toFixed(1)}%)
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </div>
@@ -284,4 +349,3 @@ export default function HostParallelView() {
     </div>
   );
 }
-
