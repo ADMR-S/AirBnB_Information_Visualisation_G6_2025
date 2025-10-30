@@ -1,8 +1,7 @@
 import { useEffect, useRef, useMemo } from 'react';
 import * as d3 from 'd3';
 import { useFilterStore } from '../../../stores/useFilterStore';
-import { useDrilldown } from './useDrilldown';
-import { useYearFilteredData } from '../../../hooks/useFilteredData';
+import { useFilteredData } from '../../../hooks/useFilteredData';
 import { EXAMPLE_BADGES, type BadgeConfig } from '../../../utils/visualBadges';
 import { calculateNaturalBreaks, createLabels } from '../../../utils/naturalBreaks';
 import { sampleColors, createColorBreaks, getColorForValue, COLOR_PALETTES } from '../../../utils/colorScale';
@@ -11,10 +10,14 @@ import '../VisualizationPage.css';
 import './TreemapView.css';
 
 export default function HostTreemapView() {
-  const { isLoading, year } = useFilterStore();
-  const { drillPath, drillDown, navigateUp } = useDrilldown();
-  const filteredData = useYearFilteredData(year === '2020' ? 2020 : 2023, drillPath);
+  const { isLoading, states, cities, setStates, setCities } = useFilterStore();
+  const filteredData = useFilteredData();
   const svgRef = useRef<SVGSVGElement>(null);
+
+  // Derive current level from filter state
+  const currentLevel = states.length === 0 ? 0 
+                     : cities.length === 0 ? 1 
+                     : 2;
 
   const priceBreaks = useMemo(() => {
     const prices = filteredData.map(d => d.price).filter(p => p > 0);
@@ -28,15 +31,38 @@ export default function HostTreemapView() {
 
   const badges: BadgeConfig[] = [EXAMPLE_BADGES.highPrice, EXAMPLE_BADGES.popular];
 
+  // Click handler to set filters directly
+  const handleClick = (item: any) => {
+    if (!item.level || !item.name) return;
+    
+    if (item.level === 'state') {
+      setStates([item.name]);
+      setCities([]);
+    } else if (item.level === 'city') {
+      if (states.length === 0 && item.parentState) {
+        setStates([item.parentState]);
+      }
+      setCities([item.name]);
+    }
+  };
+
+  // Navigation handler for breadcrumbs
+  const handleNavigate = (level: number) => {
+    if (level === -1) {
+      setStates([]);
+      setCities([]);
+    } else if (level === 0) {
+      setCities([]);
+    }
+  };
+
   useEffect(() => {
     if (isLoading || filteredData.length === 0) return;
     renderTreemap();
-  }, [filteredData, isLoading, drillPath]);
+  }, [filteredData, isLoading, states, cities]);
 
   const buildHierarchy = (): TreemapNode => {
-    const level = drillPath.length;
-    
-    if (level === 0) {
+    if (currentLevel === 0) {
       const grouped = d3.group(filteredData, d => d.state, d => d.city);
       return {
         name: 'root',
@@ -53,7 +79,7 @@ export default function HostTreemapView() {
       };
     }
     
-    if (level === 1) {
+    if (currentLevel === 1) {
       const grouped = d3.group(filteredData, d => d.city, d => categorizeHostSize(d.calculated_host_listings_count));
       return {
         name: 'root',
@@ -69,7 +95,7 @@ export default function HostTreemapView() {
       };
     }
     
-    if (level === 2) {
+    if (currentLevel === 2) {
       const grouped = d3.group(filteredData, d => categorizeHostSize(d.calculated_host_listings_count), d => d.room_type);
       return {
         name: 'root',
@@ -105,7 +131,7 @@ export default function HostTreemapView() {
 
     const width = svgElement.clientWidth || 600;
     const height = svgElement.clientHeight || 500;
-    const currentLevel = ['state', 'city', 'host_category', 'room_type'][drillPath.length];
+    const levelName = ['state', 'city', 'host_category', 'room_type'][currentLevel];
 
     const root = d3.hierarchy(buildHierarchy())
       .sum((d: any) => (d.value > 0 ? Math.log1p(d.value) : 0))
@@ -113,11 +139,11 @@ export default function HostTreemapView() {
 
     d3.treemap<any>()
       .size([width, height])
-      .paddingTop(currentLevel === 'room_type' ? 20 : 25)
+      .paddingTop(levelName === 'room_type' ? 20 : 25)
       .paddingInner(2)
       (root as any);
 
-    renderTreemapSVG(svg, root as any, currentLevel, {
+    renderTreemapSVG(svg, root as any, levelName, {
       colorFn: (d) => getColorForValue(d.data.avgPrice, priceBreaks, '#999'),
       tooltipFn: (d) => `
         <strong>${d.data.name}</strong><br/>
@@ -126,7 +152,7 @@ export default function HostTreemapView() {
         Avg Reviews: ${Math.round(d.data.avgReviews)}
       `,
       badges,
-      onDrillDown: drillDown,
+      onDrillDown: handleClick,
       finalLevel: 'room_type',
     });
   };
@@ -146,17 +172,25 @@ export default function HostTreemapView() {
       </div>
 
       <div className="breadcrumb-nav">
-        <button className="breadcrumb-item" onClick={() => navigateUp(-1)}>
+        <button className="breadcrumb-item" onClick={() => handleNavigate(-1)}>
           All States
         </button>
-        {drillPath.map((item, index) => (
-          <span key={index}>
+        {states.length === 1 && (
+          <span>
             <span className="breadcrumb-separator">›</span>
-            <button className="breadcrumb-item" onClick={() => navigateUp(index)}>
-              {item.name}
+            <button className="breadcrumb-item" onClick={() => handleNavigate(0)}>
+              {states[0]}
             </button>
           </span>
-        ))}
+        )}
+        {cities.length === 1 && (
+          <span>
+            <span className="breadcrumb-separator">›</span>
+            <button className="breadcrumb-item" onClick={() => handleNavigate(1)}>
+              {cities[0]}
+            </button>
+          </span>
+        )}
       </div>
 
       <div className="treemap-with-legend">

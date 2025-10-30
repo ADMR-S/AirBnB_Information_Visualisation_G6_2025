@@ -1,10 +1,10 @@
 import { useFilterStore } from '../../../stores/useFilterStore';
-import { useYearFilteredData } from '../../../hooks/useFilteredData';
+import { useFilteredData } from '../../../hooks/useFilteredData';
 import '../VisualizationPage.css';
 
 export default function HostParallelView() {
-  const { isLoading, year } = useFilterStore();
-  const filteredData = useYearFilteredData(year === '2020' ? 2020 : 2023, []);
+  const { isLoading } = useFilterStore();
+  const filteredData = useFilteredData();
 
   if (isLoading) return <div className="viz-container loading">Loading data...</div>;
 
