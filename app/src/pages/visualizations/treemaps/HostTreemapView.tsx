@@ -6,18 +6,15 @@ import { EXAMPLE_BADGES, type BadgeConfig } from '../../../utils/visualBadges';
 import { calculateNaturalBreaks, createLabels } from '../../../utils/naturalBreaks';
 import { sampleColors, createColorBreaks, getColorForValue, COLOR_PALETTES } from '../../../utils/colorScale';
 import { aggregateListings, categorizeHostSize, renderTreemapSVG, type TreemapNode } from './treemapHelpers';
+import { useTreemapNavigation } from './useTreemapNavigation';
 import '../VisualizationPage.css';
 import './TreemapView.css';
 
 export default function HostTreemapView() {
-  const { isLoading, states, cities, setStates, setCities } = useFilterStore();
+  const { isLoading, states, cities } = useFilterStore();
   const filteredData = useFilteredData();
+  const { currentLevel, handleClick } = useTreemapNavigation();
   const svgRef = useRef<SVGSVGElement>(null);
-
-  // Derive current level from filter state
-  const currentLevel = states.length === 0 ? 0 
-                     : cities.length === 0 ? 1 
-                     : 2;
 
   const priceBreaks = useMemo(() => {
     const prices = filteredData.map(d => d.price).filter(p => p > 0);
@@ -30,31 +27,6 @@ export default function HostTreemapView() {
   }, [filteredData]);
 
   const badges: BadgeConfig[] = [EXAMPLE_BADGES.highPrice, EXAMPLE_BADGES.popular];
-
-  // Click handler to set filters directly
-  const handleClick = (item: any) => {
-    if (!item.level || !item.name) return;
-    
-    if (item.level === 'state') {
-      setStates([item.name]);
-      setCities([]);
-    } else if (item.level === 'city') {
-      if (states.length === 0 && item.parentState) {
-        setStates([item.parentState]);
-      }
-      setCities([item.name]);
-    }
-  };
-
-  // Navigation handler for breadcrumbs
-  const handleNavigate = (level: number) => {
-    if (level === -1) {
-      setStates([]);
-      setCities([]);
-    } else if (level === 0) {
-      setCities([]);
-    }
-  };
 
   useEffect(() => {
     if (isLoading || filteredData.length === 0) return;
@@ -169,28 +141,6 @@ export default function HostTreemapView() {
     <div className="viz-container">
       <div className="treemap-header">
         <h2>Market Structure Analysis</h2>
-      </div>
-
-      <div className="breadcrumb-nav">
-        <button className="breadcrumb-item" onClick={() => handleNavigate(-1)}>
-          All States
-        </button>
-        {states.length === 1 && (
-          <span>
-            <span className="breadcrumb-separator">›</span>
-            <button className="breadcrumb-item" onClick={() => handleNavigate(0)}>
-              {states[0]}
-            </button>
-          </span>
-        )}
-        {cities.length === 1 && (
-          <span>
-            <span className="breadcrumb-separator">›</span>
-            <button className="breadcrumb-item" onClick={() => handleNavigate(1)}>
-              {cities[0]}
-            </button>
-          </span>
-        )}
       </div>
 
       <div className="treemap-with-legend">
