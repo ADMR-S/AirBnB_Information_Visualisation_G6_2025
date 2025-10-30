@@ -163,7 +163,7 @@ cython_debug/
 *.tsv
 *.xlsx
 *.xls
-*.json
+#*.json
 *.parquet
 *.hdf5
 *.h5
