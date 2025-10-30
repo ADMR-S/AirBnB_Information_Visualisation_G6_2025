@@ -13,6 +13,12 @@
   stroke-linecap: round;
 }
 
+.bubble {
+  fill-opacity: .5;
+  stroke: #fff;
+  stroke-width: .5px;
+}
+
 
 </style>
 <body>
@@ -25,6 +31,10 @@ var width = 960,
 
 var path = d3.geo.path()
     .projection(null);
+
+var radius = d3.scale.sqrt()
+    .domain([0, 1e6])
+    .range([0, 15]);
 
 var svg = d3.select("body").append("svg")
     .attr("width", width)
@@ -42,6 +52,15 @@ d3.json("us.json", function(error, us) {
       .datum(topojson.mesh(us, us.objects.states, function(a, b) { return a !== b; }))
       .attr("class", "border border--state")
       .attr("d", path);
+
+  svg.append("g")
+      .attr("class", "bubble")
+    .selectAll("circle")
+      .data(topojson.feature(us, us.objects.counties).features
+        .sort(function(a, b) { return b.properties.population - a.properties.population; }))
+    .enter().append("circle")
+      .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+      .attr("r", function(d) { return radius(d.properties.population); });
 });
 
 </script>
