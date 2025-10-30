@@ -1,0 +1,37 @@
+.navigation {
+  width: 250px;
+  background: white;
+  border-right: 1px solid #e0e0e0;
+  padding: 1.5rem 0;
+}
+
+.navigation a {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  color: #555;
+  text-decoration: none;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.navigation a:hover {
+  background: #f5f5f5;
+}
+
+.navigation a.active {
+  color: white;
+}
+
+.navigation.traveler a.active {
+  background: #667eea;
+}
+
+.navigation.host a.active {
+  background: #764ba2;
+}
+
+.navigation .label {
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
