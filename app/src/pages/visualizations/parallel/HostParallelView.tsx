@@ -2,15 +2,14 @@ import React, { useEffect, useRef, useMemo, useState } from 'react';
 // @ts-ignore - d3 types are not installed in project (dev-dependency) — treat as any
 import * as d3 from 'd3';
 import { useFilterStore } from '../../../stores/useFilterStore';
-import { useYearFilteredData } from '../../../hooks/useFilteredData';
+import { useFilteredData } from '../../../hooks/useFilteredData';
 import type { AirbnbListing } from '../../../types/airbnb.types';
 import '../VisualizationPage.css';
 import { sampleColors } from '../../../utils/colorScale';
 
 export default function HostParallelView() {
   const { isLoading, year, roomTypes: activeRoomTypes, setRoomTypes } = useFilterStore();
-  const yearNum = year === '2020' ? 2020 : 2023;
-  const filteredData = useYearFilteredData(yearNum, []);
+  const filteredData = useFilteredData();
   const svgRef = useRef<SVGSVGElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [renderAll, setRenderAll] = useState(true);
