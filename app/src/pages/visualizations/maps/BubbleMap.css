@@ -1,0 +1,34 @@
+.land {
+  fill: #ddd;
+}
+
+.border {
+  fill: none;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.border--state {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+.bubble circle {
+  cursor: pointer;
+}
+
+.bubble circle:hover {
+  stroke: #000;
+  stroke-width: 1.5px;
+}
+
+.legend circle {
+  fill: none;
+  stroke: #ccc;
+}
+
+.legend text {
+  fill: #777;
+  font: 10px sans-serif;
+  text-anchor: middle;
+}

@@ -3,6 +3,7 @@ import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import type { AirbnbListing, Persona } from '../../../types/airbnb.types';
 import '../VisualizationPage.css';
+import './BubbleMap.css';
 
 interface BubbleMapProps {
   filteredData: AirbnbListing[];
@@ -128,7 +129,7 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
     // us.json has pre-projected coordinates, so use null projection for the map
     const path = d3.geoPath().projection(null);
     
-    // Use the EXACT same projection as used to create us.json (from Makefile)
+    // Use the same projection as used to create us.json (from Makefile)
     // --projection='width = 960, height = 600, d3.geo.albersUsa().scale(1280).translate([width / 2, height / 2])'
     const projection = d3.geoAlbersUsa().scale(1280).translate([960 / 2, 600 / 2]);
 
@@ -205,33 +206,6 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
 
   return (
     <div className="viz-container">
-      <style>{`
-        .land {
-          fill: #ddd;
-        }
-        .border {
-          fill: none;
-          stroke: #fff;
-          stroke-linejoin: round;
-          stroke-linecap: round;
-        }
-        .bubble circle {
-          cursor: pointer;
-        }
-        .bubble circle:hover {
-          stroke: #000;
-          stroke-width: 1.5px;
-        }
-        .legend circle {
-          fill: none;
-          stroke: #ccc;
-        }
-        .legend text {
-          fill: #777;
-          font: 10px sans-serif;
-          text-anchor: middle;
-        }
-      `}</style>
       <h2>{title}</h2>
       <p className="viz-description">{description}</p>
       <div ref={containerRef} style={{ width: '100%', minHeight: '600px' }}>
