@@ -1,0 +1,7 @@
+Sliders pour les filtres ?
+
+Créer un fichier de data pour 2023 et un pour 2020 plutôt qu'un dataset combinant les deux ? (Montrer qu'on peut remplacer le fichier de data)
+
+Rapport
+
+Si on se chauffe : base de donnée en ligne pour données dynamiques mais probablement pas
