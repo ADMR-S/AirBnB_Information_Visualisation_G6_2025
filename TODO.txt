@@ -5,3 +5,14 @@ Créer un fichier de data pour 2023 et un pour 2020 plutôt qu'un dataset combin
 Rapport
 
 Si on se chauffe : base de donnée en ligne pour données dynamiques mais probablement pas
+
+MAP
+Cercles : taille en fonction des coordonnées max
+optimiser
+3 niveaux de zoom : US/state with cities et county/neighborhood
+
+Localiser les offres MAP
+Suivre la densité concurrentielle MAP + Field, 
+Voir ses propres logements et les offres alentours sur la carte MAP 
+    Forme + couleur
+
