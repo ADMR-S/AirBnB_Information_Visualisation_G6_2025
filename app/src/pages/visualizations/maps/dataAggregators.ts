@@ -1,5 +1,6 @@
 import type { AirbnbListing } from '../../../types/airbnb.types';
 import type { BubbleData, AggregatedCityData, AggregatedNeighborhoodData } from '../../../types/bubbleMap.types';
+import { MAP_CONFIG } from './mapConfig';
 
 /**
  * Aggregates Airbnb listings by city
@@ -68,6 +69,93 @@ export function aggregateByNeighborhood(data: AirbnbListing[]): BubbleData[] {
     sizeValue: data.count,
     colorValue: data.priceSum / data.count
   }));
+}
+
+/**
+ * Aggregates Airbnb listings by neighborhood as fields with coordinate bounds
+ * Filters out neighborhoods with only 1 listing
+ * @param data Array of Airbnb listings
+ * @returns Array of NeighborhoodField representing neighborhoods with their bounding boxes
+ */
+export function aggregateNeighborhoodFields(data: AirbnbListing[]) {
+  const neighborhoodData = new Map<string, {
+    city: string;
+    neighbourhood: string;
+    listings: AirbnbListing[];
+    priceSum: number;
+    minLat: number;
+    maxLat: number;
+    minLng: number;
+    maxLng: number;
+  }>();
+  
+  data.forEach(d => {
+    // Create a unique key using both city and neighborhood to avoid conflicts
+    const key = `${d.city}, ${d.state}|${d.neighbourhood}`;
+    const existing = neighborhoodData.get(key);
+    if (existing) {
+      existing.listings.push(d);
+      existing.priceSum += d.price;
+      existing.minLat = Math.min(existing.minLat, d.latitude);
+      existing.maxLat = Math.max(existing.maxLat, d.latitude);
+      existing.minLng = Math.min(existing.minLng, d.longitude);
+      existing.maxLng = Math.max(existing.maxLng, d.longitude);
+    } else {
+      neighborhoodData.set(key, {
+        city: d.city,
+        neighbourhood: d.neighbourhood,
+        listings: [d],
+        priceSum: d.price,
+        minLat: d.latitude,
+        maxLat: d.latitude,
+        minLng: d.longitude,
+        maxLng: d.longitude
+      });
+    }
+  });
+
+  // Filter out single-listing neighborhoods and convert to NeighborhoodField
+  const fields = Array.from(neighborhoodData.entries())
+    .filter(([_, data]) => data.listings.length > 1)
+    .map(([_key, data]) => ({
+      label: `${data.neighbourhood} (${data.city})`,
+      count: data.listings.length,
+      avgPrice: data.priceSum / data.listings.length,
+      minLat: data.minLat,
+      maxLat: data.maxLat,
+      minLng: data.minLng,
+      maxLng: data.maxLng,
+      listings: data.listings
+    }));
+
+  if (MAP_CONFIG.DEBUG_LOG) {
+    console.log(`[aggregateNeighborhoodFields] Total neighborhoods: ${fields.length}`);
+    
+    // Log first few neighborhoods with suspicious bounds
+    fields.slice(0, 5).forEach(field => {
+      const latSpan = field.maxLat - field.minLat;
+      const lngSpan = field.maxLng - field.minLng;
+      console.log(`[Neighborhood] ${field.label}:`, {
+        count: field.count,
+        bounds: `lat: ${field.minLat.toFixed(4)} to ${field.maxLat.toFixed(4)} (span: ${latSpan.toFixed(4)})`,
+        boundsLng: `lng: ${field.minLng.toFixed(4)} to ${field.maxLng.toFixed(4)} (span: ${lngSpan.toFixed(4)})`,
+        avgPrice: field.avgPrice.toFixed(2)
+      });
+    });
+
+    // Check for suspiciously large neighborhoods
+    const largeFields = fields.filter(f => 
+      (f.maxLat - f.minLat > 5) || (f.maxLng - f.minLng > 5)
+    );
+    if (largeFields.length > 0) {
+      console.warn(`[WARNING] Found ${largeFields.length} neighborhoods with suspicious bounds (>5 degree span):`);
+      largeFields.forEach(field => {
+        console.warn(`  - ${field.label}: lat span ${(field.maxLat - field.minLat).toFixed(2)}°, lng span ${(field.maxLng - field.minLng).toFixed(2)}°`);
+      });
+    }
+  }
+
+  return fields;
 }
 
 /**

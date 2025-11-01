@@ -77,12 +77,12 @@
   cursor: not-allowed;
 }
 
-.neighborhood-fields rect {
+.neighborhood-fields polygon {
   cursor: pointer;
   transition: fill-opacity 0.2s ease, stroke-width 0.2s ease;
 }
 
-.neighborhood-fields rect:hover {
+.neighborhood-fields polygon:hover {
   fill-opacity: 0.7 !important;
   stroke-width: 3 !important;
 }

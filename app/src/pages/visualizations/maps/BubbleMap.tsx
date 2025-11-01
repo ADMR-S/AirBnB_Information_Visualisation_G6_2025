@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import type { AirbnbListing, Persona } from '../../../types/airbnb.types';
-import { aggregateByCity, aggregateByNeighborhood, getMaxSizeValue } from './dataAggregators';
+import { aggregateByCity, aggregateNeighborhoodFields, getMaxSizeValue } from './dataAggregators';
 import { createProjection, createNullProjectionPath } from './mapUtils';
-import { makeBubbles, renderBaseMap } from './mapRenderers';
+import { makeBubbles, makeNeighborhoodFields, renderBaseMap } from './mapRenderers';
 import { MAP_CONFIG } from './mapConfig';
 import '../VisualizationPage.css';
 import './BubbleMap.css';
@@ -18,7 +18,6 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const maxCityCountRef = useRef<number>(0);
-  const maxNeighborhoodCountRef = useRef<number>(0);
   const currentZoomRef = useRef<number>(1);
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
@@ -45,31 +44,44 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
     const g = svg.append("g");
 
     // Aggregate data by CITY and NEIGHBORHOOD
+    if (MAP_CONFIG.DEBUG_LOG) {
+      console.log(`[BubbleMap] Processing ${filteredData.length} listings`);
+    }
     const cityBubbles = aggregateByCity(filteredData);
-    const neighborhoodBubbles = aggregateByNeighborhood(filteredData);
+    const neighborhoodFields = aggregateNeighborhoodFields(filteredData);
+    if (MAP_CONFIG.DEBUG_LOG) {
+      console.log(`[BubbleMap] Aggregated to ${cityBubbles.length} cities and ${neighborhoodFields.length} neighborhoods`);
+    }
 
     // Update max for consistent scaling
     const cityMax = getMaxSizeValue(cityBubbles);
-    const neighborhoodMax = getMaxSizeValue(neighborhoodBubbles);
     
     if (cityMax > maxCityCountRef.current) {
       maxCityCountRef.current = cityMax;
     }
-    if (neighborhoodMax > maxNeighborhoodCountRef.current) {
-      maxNeighborhoodCountRef.current = neighborhoodMax;
-    }
 
-    // Function to render bubbles based on zoom level
-    function renderBubbles(zoomLevel: number) {
-      // Remove existing bubbles
+    // Function to render based on zoom level
+    function renderVisualization(zoomLevel: number) {
+      if (MAP_CONFIG.DEBUG_LOG) {
+        console.log(`[BubbleMap] renderVisualization called with zoomLevel: ${zoomLevel.toFixed(2)}`);
+      }
+      
+      // Remove existing visualizations
       g.selectAll('.bubble').remove();
+      g.selectAll('.neighborhood-fields').remove();
 
       if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
-        // Show cities
+        if (MAP_CONFIG.DEBUG_LOG) {
+          console.log(`[BubbleMap] Rendering CITY bubbles (zoom < ${MAP_CONFIG.zoom.cityThreshold})`);
+        }
+        // Show cities as bubbles
         makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
       } else {
-        // Show neighborhoods
-        makeBubbles(g, projection, neighborhoodBubbles, maxNeighborhoodCountRef.current, MAP_CONFIG.bubbles.neighborhoodSizeRange);
+        if (MAP_CONFIG.DEBUG_LOG) {
+          console.log(`[BubbleMap] Rendering NEIGHBORHOOD fields (zoom >= ${MAP_CONFIG.zoom.cityThreshold})`);
+        }
+        // Show neighborhoods as fields
+        makeNeighborhoodFields(g, projection, neighborhoodFields);
       }
     }
 
@@ -85,16 +97,16 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
         if ((currentZoomRef.current < MAP_CONFIG.zoom.cityThreshold && zoomLevel >= MAP_CONFIG.zoom.cityThreshold) || 
             (currentZoomRef.current >= MAP_CONFIG.zoom.cityThreshold && zoomLevel < MAP_CONFIG.zoom.cityThreshold)) {
           currentZoomRef.current = zoomLevel;
-          renderBubbles(zoomLevel);
+          renderVisualization(zoomLevel);
         }
       });
 
     svg.call(zoom);
     zoomBehaviorRef.current = zoom;
 
-    // Load base map and render initial bubbles
+    // Load base map and render initial visualization
     renderBaseMap(g, path, () => {
-      renderBubbles(1);
+      renderVisualization(1);
     });
 
   }, [filteredData, persona]);

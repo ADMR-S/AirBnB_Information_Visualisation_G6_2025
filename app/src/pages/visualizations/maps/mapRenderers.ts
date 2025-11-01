@@ -55,7 +55,7 @@ export function makeBubbles(
 }
 
 /**
- * Creates neighborhood fields (rectangles) based on coordinate bounds
+ * Creates neighborhood fields (quadrilaterals) based on coordinate bounds
  * @param container D3 selection of the container element
  * @param projection D3 GeoProjection for coordinate transformation
  * @param neighborhoodFields Array of neighborhood field data
@@ -65,39 +65,62 @@ export function makeNeighborhoodFields(
   projection: d3.GeoProjection,
   neighborhoodFields: NeighborhoodField[]
 ) {
+  if (MAP_CONFIG.DEBUG_LOG) {
+    console.log(`[makeNeighborhoodFields] Rendering ${neighborhoodFields.length} neighborhoods`);
+  }
+  
   const maxAvgPrice = d3.max(neighborhoodFields, d => d.avgPrice) || 1;
   const colorScale = createColorScale(maxAvgPrice);
 
   const fieldsGroup = container.append("g").attr("class", "neighborhood-fields");
 
-  neighborhoodFields.forEach(field => {
+  let successCount = 0;
+  let failCount = 0;
+
+  neighborhoodFields.forEach((field, index) => {
+    // Log first few fields
+    if (MAP_CONFIG.DEBUG_LOG && index < 3) {
+      console.log(`[Field ${index}] ${field.label}:`, {
+        coords: `lng [${field.minLng.toFixed(4)}, ${field.maxLng.toFixed(4)}], lat [${field.minLat.toFixed(4)}, ${field.maxLat.toFixed(4)}]`,
+        span: `lng: ${(field.maxLng - field.minLng).toFixed(4)}°, lat: ${(field.maxLat - field.minLat).toFixed(4)}°`,
+        listings: field.count,
+        avgPrice: field.avgPrice.toFixed(2)
+      });
+    }
+
     // Project all four corners of the bounding box
     const topLeft = projection([field.minLng, field.maxLat]);
     const topRight = projection([field.maxLng, field.maxLat]);
     const bottomLeft = projection([field.minLng, field.minLat]);
     const bottomRight = projection([field.maxLng, field.minLat]);
 
+    // Log first few projections
+    if (MAP_CONFIG.DEBUG_LOG && index < 3) {
+      console.log(`  Projected corners:`, {
+        topLeft: topLeft ? `[${topLeft[0].toFixed(1)}, ${topLeft[1].toFixed(1)}]` : 'null',
+        topRight: topRight ? `[${topRight[0].toFixed(1)}, ${topRight[1].toFixed(1)}]` : 'null',
+        bottomLeft: bottomLeft ? `[${bottomLeft[0].toFixed(1)}, ${bottomLeft[1].toFixed(1)}]` : 'null',
+        bottomRight: bottomRight ? `[${bottomRight[0].toFixed(1)}, ${bottomRight[1].toFixed(1)}]` : 'null'
+      });
+    }
+
     // Skip if any projection fails
-    if (!topLeft || !topRight || !bottomLeft || !bottomRight) return;
+    if (!topLeft || !topRight || !bottomLeft || !bottomRight) {
+      failCount++;
+      if (MAP_CONFIG.DEBUG_LOG && index < 5) {
+        console.warn(`[Projection FAILED] ${field.label}: At least one corner is null`);
+      }
+      return;
+    }
 
-    // Calculate the actual bounding box in screen coordinates
-    const minX = Math.min(topLeft[0], topRight[0], bottomLeft[0], bottomRight[0]);
-    const maxX = Math.max(topLeft[0], topRight[0], bottomLeft[0], bottomRight[0]);
-    const minY = Math.min(topLeft[1], topRight[1], bottomLeft[1], bottomRight[1]);
-    const maxY = Math.max(topLeft[1], topRight[1], bottomLeft[1], bottomRight[1]);
+    successCount++;
 
-    const width = maxX - minX;
-    const height = maxY - minY;
+    // Create polygon points string for quadrilateral (top-left, top-right, bottom-right, bottom-left)
+    const points = `${topLeft[0]},${topLeft[1]} ${topRight[0]},${topRight[1]} ${bottomRight[0]},${bottomRight[1]} ${bottomLeft[0]},${bottomLeft[1]}`;
 
-    // Skip if dimensions are too small or invalid
-    if (width <= 0 || height <= 0) return;
-
-    // Draw the rectangle
-    fieldsGroup.append("rect")
-      .attr("x", minX)
-      .attr("y", minY)
-      .attr("width", width)
-      .attr("height", height)
+    // Draw the quadrilateral polygon
+    fieldsGroup.append("polygon")
+      .attr("points", points)
       .attr("fill", colorScale(field.avgPrice))
       .attr("fill-opacity", MAP_CONFIG.neighborhoodFields.fillOpacity)
       .attr("stroke", colorScale(field.avgPrice))
@@ -107,6 +130,10 @@ export function makeNeighborhoodFields(
       .append("title")
       .text(`${field.label}\nListings: ${field.count}\nAvg Price: $${field.avgPrice.toFixed(0)}`);
   });
+
+  if (MAP_CONFIG.DEBUG_LOG) {
+    console.log(`[makeNeighborhoodFields] Result: ${successCount} rendered, ${failCount} failed projection`);
+  }
 }
 
 /**
