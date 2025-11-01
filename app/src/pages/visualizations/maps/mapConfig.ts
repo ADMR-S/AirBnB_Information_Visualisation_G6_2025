@@ -7,7 +7,7 @@ export const MAP_CONFIG = {
     translate: [480, 300] as [number, number] // [width/2, height/2]
   },
   zoom: {
-    scaleExtent: [1, 20] as [number, number],
+    scaleExtent: [1, 50] as [number, number],
     cityThreshold: 3,
     transitionDuration: 300,
     zoomFactor: 1.5
@@ -26,5 +26,12 @@ export const MAP_CONFIG = {
     fillOpacity: 0.4,
     strokeWidth: 0.1,
     strokeOpacity: 0.3
+  },
+  fisheye: {
+    baseRadius: 150, // Base radius at zoom level 1
+    radiusScaleFactor: 0.5, // How much radius scales with zoom (radius = baseRadius / (zoom * factor))
+    distortion: 2, // Magnification factor (higher = stronger distortion)
+    listingBubbleRadius: 2, // Size of individual listing bubbles
+    enabled: true
   }
 };

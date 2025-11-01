@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import type { AirbnbListing, Persona } from '../../../types/airbnb.types';
 import { aggregateByCity, aggregateNeighborhoodFields, aggregateCityBoundaries, getMaxSizeValue } from './dataAggregators';
 import { createProjection, createNullProjectionPath } from './mapUtils';
 import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap } from './mapRenderers';
+import { renderFisheyeListings, applyFisheyeToBasemap, restoreBasemapPaths, getFisheyeRadius } from './fisheyeUtils';
 import { MAP_CONFIG } from './mapConfig';
 import '../VisualizationPage.css';
 import './BubbleMap.css';
@@ -20,6 +21,9 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
   const maxCityCountRef = useRef<number>(0);
   const currentZoomRef = useRef<number>(1);
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const originalPathsRef = useRef<Map<SVGPathElement | SVGPolygonElement, string>>(new Map());
+  const [fisheyeActive, setFisheyeActive] = useState(false);
+  const [fisheyePosition, setFisheyePosition] = useState<[number, number]>([0, 0]);
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current || filteredData.length === 0) return;
@@ -96,17 +100,78 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
         g.attr("transform", event.transform);
         
         const zoomLevel = event.transform.k;
+        const previousZoomLevel = currentZoomRef.current;
         
-        // Only re-render if we cross the threshold
-        if ((currentZoomRef.current < MAP_CONFIG.zoom.cityThreshold && zoomLevel >= MAP_CONFIG.zoom.cityThreshold) || 
-            (currentZoomRef.current >= MAP_CONFIG.zoom.cityThreshold && zoomLevel < MAP_CONFIG.zoom.cityThreshold)) {
-          currentZoomRef.current = zoomLevel;
+        // Always update the current zoom level
+        currentZoomRef.current = zoomLevel;
+        
+        // Re-render visualization if we cross the threshold
+        if ((previousZoomLevel < MAP_CONFIG.zoom.cityThreshold && zoomLevel >= MAP_CONFIG.zoom.cityThreshold) || 
+            (previousZoomLevel >= MAP_CONFIG.zoom.cityThreshold && zoomLevel < MAP_CONFIG.zoom.cityThreshold)) {
           renderVisualization(zoomLevel);
+          
+          // Clean up fisheye elements when zooming out to city level
+          if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
+            g.selectAll('.fisheye-listings-group').remove();
+            g.selectAll('.fisheye-lens-circle').remove();
+            restoreBasemapPaths(g, originalPathsRef.current);
+            setFisheyeActive(false);
+          }
+        }
+        
+        // Update fisheye if it's currently active and we're at neighborhood level
+        if (fisheyeActive && zoomLevel >= MAP_CONFIG.zoom.cityThreshold && fisheyePosition) {
+          const fisheyeRadius = getFisheyeRadius(zoomLevel);
+          
+          // Apply fisheye distortion to base map
+          applyFisheyeToBasemap(g, fisheyePosition, fisheyeRadius, originalPathsRef.current);
+          
+          // Re-render fisheye listings with updated zoom
+          g.selectAll('.fisheye-listings-group').remove();
+          renderFisheyeListings(g, filteredData, projection, fisheyePosition, zoomLevel);
         }
       });
 
     svg.call(zoom);
     zoomBehaviorRef.current = zoom;
+
+    // Add fisheye interaction (only at neighborhood zoom level)
+    if (MAP_CONFIG.fisheye.enabled) {
+      svg.on('mousemove', function(event: MouseEvent) {
+        // Don't activate fisheye if mouse is over a popup
+        const target = event.target as HTMLElement;
+        if (target.closest('.listing-popup')) {
+          return;
+        }
+        
+        const zoomLevel = currentZoomRef.current;
+        if (zoomLevel >= MAP_CONFIG.zoom.cityThreshold) {
+          // Get mouse position relative to the transformed group 'g', not the SVG root
+          const [mouseX, mouseY] = d3.pointer(event, g.node());
+          setFisheyePosition([mouseX, mouseY]);
+          setFisheyeActive(true);
+          
+          const fisheyeRadius = getFisheyeRadius(zoomLevel);
+          
+          // Apply fisheye distortion to base map
+          applyFisheyeToBasemap(g, [mouseX, mouseY], fisheyeRadius, originalPathsRef.current);
+          
+          // Render fisheye listings
+          g.selectAll('.fisheye-listings-group').remove();
+          renderFisheyeListings(g, filteredData, projection, [mouseX, mouseY], currentZoomRef.current);
+        } else {
+          setFisheyeActive(false);
+          restoreBasemapPaths(g, originalPathsRef.current);
+          g.selectAll('.fisheye-listings-group').remove();
+        }
+      });
+      
+      svg.on('mouseleave', function() {
+        setFisheyeActive(false);
+        restoreBasemapPaths(g, originalPathsRef.current);
+        g.selectAll('.fisheye-listings-group').remove();
+      });
+    }
 
     // Load base map and render initial visualization
     renderBaseMap(g, path, () => {
