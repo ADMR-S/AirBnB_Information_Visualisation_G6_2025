@@ -7,7 +7,7 @@ export const MAP_CONFIG = {
     translate: [480, 300] as [number, number] // [width/2, height/2]
   },
   zoom: {
-    scaleExtent: [1, 50] as [number, number],
+    scaleExtent: [1, 100] as [number, number],
     cityThreshold: 3,
     transitionDuration: 300,
     zoomFactor: 1.5

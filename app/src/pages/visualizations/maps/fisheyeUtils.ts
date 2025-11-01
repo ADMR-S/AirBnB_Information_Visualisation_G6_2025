@@ -197,7 +197,7 @@ export function updateSelectedListing(
       .attr('fill', '#FF5722')
       .attr('fill-opacity', 0.9)
       .attr('stroke', '#fff')
-      .attr('stroke-width', 0.5)
+      .attr('stroke-width', 0.15)
       .style('cursor', 'pointer')
       .style('pointer-events', 'none');
   }
@@ -318,7 +318,7 @@ export function renderFisheyeListings(
         .attr('fill', '#FF5722')
         .attr('fill-opacity', 0.9)
         .attr('stroke', '#fff')
-        .attr('stroke-width', 0.5)
+        .attr('stroke-width', 0.15)
         .style('pointer-events', 'none'); // Prevent interaction with selected bubble
     })
     .on('mouseover', function(this: SVGCircleElement) {
@@ -355,7 +355,7 @@ export function renderFisheyeListings(
       .attr('fill', '#FF5722')
       .attr('fill-opacity', 0.9)
       .attr('stroke', '#fff')
-      .attr('stroke-width', 0.5)
+      .attr('stroke-width', 0.15)
       .style('pointer-events', 'none');
   } else if (selectedListingId) {
     // Selected listing exists but is outside fisheye - keep it at original position
@@ -372,7 +372,7 @@ export function renderFisheyeListings(
             .attr('fill', '#FF5722')
             .attr('fill-opacity', 0.9)
             .attr('stroke', '#fff')
-            .attr('stroke-width', 0.5)
+            .attr('stroke-width', 0.15)
             .style('pointer-events', 'none');
         }
         
