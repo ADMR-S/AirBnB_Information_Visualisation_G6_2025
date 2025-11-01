@@ -24,7 +24,7 @@ export const MAP_CONFIG = {
   },
   neighborhoodFields: {
     fillOpacity: 0.4,
-    strokeWidth: 0.2,
-    strokeOpacity: 0.4
+    strokeWidth: 0.1,
+    strokeOpacity: 0.3
   }
 };

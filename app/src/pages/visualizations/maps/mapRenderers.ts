@@ -1,6 +1,6 @@
 import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
-import type { BubbleData, NeighborhoodField } from '../../../types/bubbleMap.types';
+import type { BubbleData, NeighborhoodField, CityBoundary } from '../../../types/bubbleMap.types';
 import { MAP_CONFIG } from './mapConfig';
 import { createColorScale, createRadiusScale } from './mapUtils';
 
@@ -80,45 +80,53 @@ export function makeNeighborhoodFields(
   neighborhoodFields.forEach((field, index) => {
     // Log first few fields
     if (MAP_CONFIG.DEBUG_LOG && index < 3) {
+      const lngs = field.hullPoints.map(p => p[0]);
+      const lats = field.hullPoints.map(p => p[1]);
       console.log(`[Field ${index}] ${field.label}:`, {
-        coords: `lng [${field.minLng.toFixed(4)}, ${field.maxLng.toFixed(4)}], lat [${field.minLat.toFixed(4)}, ${field.maxLat.toFixed(4)}]`,
-        span: `lng: ${(field.maxLng - field.minLng).toFixed(4)}°, lat: ${(field.maxLat - field.minLat).toFixed(4)}°`,
+        hullPoints: field.hullPoints.length,
+        bounds: `lng [${Math.min(...lngs).toFixed(4)}, ${Math.max(...lngs).toFixed(4)}], lat [${Math.min(...lats).toFixed(4)}, ${Math.max(...lats).toFixed(4)}]`,
         listings: field.count,
         avgPrice: field.avgPrice.toFixed(2)
       });
     }
 
-    // Project all four corners of the bounding box
-    const topLeft = projection([field.minLng, field.maxLat]);
-    const topRight = projection([field.maxLng, field.maxLat]);
-    const bottomLeft = projection([field.minLng, field.minLat]);
-    const bottomRight = projection([field.maxLng, field.minLat]);
+    // Project all hull points
+    const projectedPoints: [number, number][] = [];
+    let allValid = true;
+    
+    for (const [lng, lat] of field.hullPoints) {
+      const projected = projection([lng, lat]);
+      if (projected) {
+        projectedPoints.push(projected);
+      } else {
+        allValid = false;
+        break;
+      }
+    }
 
     // Log first few projections
     if (MAP_CONFIG.DEBUG_LOG && index < 3) {
-      console.log(`  Projected corners:`, {
-        topLeft: topLeft ? `[${topLeft[0].toFixed(1)}, ${topLeft[1].toFixed(1)}]` : 'null',
-        topRight: topRight ? `[${topRight[0].toFixed(1)}, ${topRight[1].toFixed(1)}]` : 'null',
-        bottomLeft: bottomLeft ? `[${bottomLeft[0].toFixed(1)}, ${bottomLeft[1].toFixed(1)}]` : 'null',
-        bottomRight: bottomRight ? `[${bottomRight[0].toFixed(1)}, ${bottomRight[1].toFixed(1)}]` : 'null'
-      });
+      console.log(`  Projected ${projectedPoints.length} hull points`);
+      if (projectedPoints.length > 0) {
+        console.log(`  First point: [${projectedPoints[0][0].toFixed(1)}, ${projectedPoints[0][1].toFixed(1)}]`);
+      }
     }
 
     // Skip if any projection fails
-    if (!topLeft || !topRight || !bottomLeft || !bottomRight) {
+    if (!allValid || projectedPoints.length < 3) {
       failCount++;
       if (MAP_CONFIG.DEBUG_LOG && index < 5) {
-        console.warn(`[Projection FAILED] ${field.label}: At least one corner is null`);
+        console.warn(`[Projection FAILED] ${field.label}: ${allValid ? 'Not enough points' : 'Some points returned null'}`);
       }
       return;
     }
 
     successCount++;
 
-    // Create polygon points string for quadrilateral (top-left, top-right, bottom-right, bottom-left)
-    const points = `${topLeft[0]},${topLeft[1]} ${topRight[0]},${topRight[1]} ${bottomRight[0]},${bottomRight[1]} ${bottomLeft[0]},${bottomLeft[1]}`;
+    // Create polygon points string from all hull points
+    const points = projectedPoints.map(p => `${p[0]},${p[1]}`).join(' ');
 
-    // Draw the quadrilateral polygon
+    // Draw the hull polygon
     fieldsGroup.append("polygon")
       .attr("points", points)
       .attr("fill", colorScale(field.avgPrice))
@@ -133,6 +141,73 @@ export function makeNeighborhoodFields(
 
   if (MAP_CONFIG.DEBUG_LOG) {
     console.log(`[makeNeighborhoodFields] Result: ${successCount} rendered, ${failCount} failed projection`);
+  }
+}
+
+/**
+ * Renders city boundaries as convex hull polygons
+ * @param container D3 selection of the container element
+ * @param projection D3 geo projection
+ * @param cityBoundaries Array of city boundary data
+ */
+export function makeCityBoundaries(
+  container: d3.Selection<SVGSVGElement | SVGGElement, unknown, null, undefined>,
+  projection: d3.GeoProjection,
+  cityBoundaries: CityBoundary[]
+): void {
+  if (MAP_CONFIG.DEBUG_LOG) {
+    console.log(`[makeCityBoundaries] Rendering ${cityBoundaries.length} city boundaries`);
+  }
+
+  const boundariesGroup = container.append("g").attr("class", "city-boundaries");
+
+  let successCount = 0;
+  let failCount = 0;
+
+  cityBoundaries.forEach((boundary, index) => {
+    // Project all hull points
+    const projectedPoints: [number, number][] = [];
+    let allValid = true;
+    
+    for (const [lng, lat] of boundary.hullPoints) {
+      const projected = projection([lng, lat]);
+      if (projected) {
+        projectedPoints.push(projected);
+      } else {
+        allValid = false;
+        break;
+      }
+    }
+
+    // Skip if any projection fails
+    if (!allValid || projectedPoints.length < 3) {
+      failCount++;
+      if (MAP_CONFIG.DEBUG_LOG && index < 5) {
+        console.warn(`[City Boundary FAILED] ${boundary.city}: ${allValid ? 'Not enough points' : 'Some points returned null'}`);
+      }
+      return;
+    }
+
+    successCount++;
+
+    // Create polygon points string from all hull points
+    const points = projectedPoints.map(p => `${p[0]},${p[1]}`).join(' ');
+
+    // Draw the city boundary polygon (just outline, no fill)
+    boundariesGroup.append("polygon")
+      .attr("points", points)
+      .attr("fill", "none")
+      .attr("stroke", "#333")
+      .attr("stroke-width", 0.5)
+      .attr("stroke-opacity", 0.4)
+      .attr("stroke-dasharray", "3,3")
+      .style("pointer-events", "none")  // Don't block interaction with neighborhoods
+      .append("title")
+      .text(`${boundary.city} boundary\n${boundary.totalListings.toLocaleString()} total listings`);
+  });
+
+  if (MAP_CONFIG.DEBUG_LOG) {
+    console.log(`[makeCityBoundaries] Result: ${successCount} rendered, ${failCount} failed projection`);
   }
 }
 

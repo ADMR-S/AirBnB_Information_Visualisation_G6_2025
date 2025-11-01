@@ -1,6 +1,7 @@
 import type { AirbnbListing } from '../../../types/airbnb.types';
-import type { BubbleData, AggregatedCityData, AggregatedNeighborhoodData } from '../../../types/bubbleMap.types';
+import type { BubbleData, AggregatedCityData, AggregatedNeighborhoodData, CityBoundary } from '../../../types/bubbleMap.types';
 import { MAP_CONFIG } from './mapConfig';
+import * as d3 from 'd3';
 
 /**
  * Aggregates Airbnb listings by city
@@ -90,6 +91,11 @@ export function aggregateNeighborhoodFields(data: AirbnbListing[]) {
   }>();
   
   data.forEach(d => {
+    // Skip unincorporated areas - they're not real neighborhoods
+    if (d.neighbourhood.toLowerCase().includes('unincorporated')) {
+      return;
+    }
+    
     // Create a unique key using both city and neighborhood to avoid conflicts
     const key = `${d.city}, ${d.state}|${d.neighbourhood}`;
     const existing = neighborhoodData.get(key);
@@ -114,48 +120,163 @@ export function aggregateNeighborhoodFields(data: AirbnbListing[]) {
     }
   });
 
-  // Filter out single-listing neighborhoods and convert to NeighborhoodField
+  // Filter out single-listing neighborhoods and convert to NeighborhoodField with convex hull
   const fields = Array.from(neighborhoodData.entries())
     .filter(([_, data]) => data.listings.length > 1)
-    .map(([_key, data]) => ({
-      label: `${data.neighbourhood} (${data.city})`,
-      count: data.listings.length,
-      avgPrice: data.priceSum / data.listings.length,
-      minLat: data.minLat,
-      maxLat: data.maxLat,
-      minLng: data.minLng,
-      maxLng: data.maxLng,
-      listings: data.listings
-    }));
+    .map(([_key, data]) => {
+      // Extract coordinates for convex hull computation
+      const points: [number, number][] = data.listings.map(listing => 
+        [listing.longitude, listing.latitude]
+      );
+      
+      // Compute convex hull using d3.polygonHull
+      const hull = d3.polygonHull(points);
+      
+      // If hull is null or has less than 3 points, fallback to bounding box
+      let hullPoints: [number, number][];
+      if (hull && hull.length >= 3) {
+        hullPoints = hull as [number, number][];
+      } else {
+        // Fallback: create a simple bounding box
+        hullPoints = [
+          [data.minLng, data.maxLat], // top-left
+          [data.maxLng, data.maxLat], // top-right
+          [data.maxLng, data.minLat], // bottom-right
+          [data.minLng, data.minLat]  // bottom-left
+        ];
+      }
+      
+      return {
+        label: `${data.neighbourhood} (${data.city})`,
+        count: data.listings.length,
+        avgPrice: data.priceSum / data.listings.length,
+        hullPoints: hullPoints,
+        listings: data.listings
+      };
+    });
 
   if (MAP_CONFIG.DEBUG_LOG) {
     console.log(`[aggregateNeighborhoodFields] Total neighborhoods: ${fields.length}`);
     
-    // Log first few neighborhoods with suspicious bounds
+    // Log first few neighborhoods
     fields.slice(0, 5).forEach(field => {
-      const latSpan = field.maxLat - field.minLat;
-      const lngSpan = field.maxLng - field.minLng;
+      // Calculate bounds from hull points
+      const lngs = field.hullPoints.map(p => p[0]);
+      const lats = field.hullPoints.map(p => p[1]);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      const latSpan = maxLat - minLat;
+      const lngSpan = maxLng - minLng;
+      
       console.log(`[Neighborhood] ${field.label}:`, {
         count: field.count,
-        bounds: `lat: ${field.minLat.toFixed(4)} to ${field.maxLat.toFixed(4)} (span: ${latSpan.toFixed(4)})`,
-        boundsLng: `lng: ${field.minLng.toFixed(4)} to ${field.maxLng.toFixed(4)} (span: ${lngSpan.toFixed(4)})`,
+        hullPoints: field.hullPoints.length,
+        bounds: `lat: ${minLat.toFixed(4)} to ${maxLat.toFixed(4)} (span: ${latSpan.toFixed(4)})`,
+        boundsLng: `lng: ${minLng.toFixed(4)} to ${maxLng.toFixed(4)} (span: ${lngSpan.toFixed(4)})`,
         avgPrice: field.avgPrice.toFixed(2)
       });
     });
 
     // Check for suspiciously large neighborhoods
-    const largeFields = fields.filter(f => 
-      (f.maxLat - f.minLat > 5) || (f.maxLng - f.minLng > 5)
-    );
+    const largeFields = fields.filter(f => {
+      const lngs = f.hullPoints.map(p => p[0]);
+      const lats = f.hullPoints.map(p => p[1]);
+      const latSpan = Math.max(...lats) - Math.min(...lats);
+      const lngSpan = Math.max(...lngs) - Math.min(...lngs);
+      return latSpan > 5 || lngSpan > 5;
+    });
+    
     if (largeFields.length > 0) {
       console.warn(`[WARNING] Found ${largeFields.length} neighborhoods with suspicious bounds (>5 degree span):`);
       largeFields.forEach(field => {
-        console.warn(`  - ${field.label}: lat span ${(field.maxLat - field.minLat).toFixed(2)}°, lng span ${(field.maxLng - field.minLng).toFixed(2)}°`);
+        const lngs = field.hullPoints.map(p => p[0]);
+        const lats = field.hullPoints.map(p => p[1]);
+        const latSpan = Math.max(...lats) - Math.min(...lats);
+        const lngSpan = Math.max(...lngs) - Math.min(...lngs);
+        console.warn(`  - ${field.label}: lat span ${latSpan.toFixed(2)}°, lng span ${lngSpan.toFixed(2)}°`);
       });
     }
   }
 
   return fields;
+}
+
+/**
+ * Aggregates city boundaries as convex hulls for all listings in each city
+ * Includes all listings (even unincorporated areas)
+ * @param data Array of Airbnb listings
+ * @returns Array of CityBoundary representing city boundaries
+ */
+export function aggregateCityBoundaries(data: AirbnbListing[]): CityBoundary[] {
+  const cityData = new Map<string, AirbnbListing[]>();
+  
+  // Group all listings by city (including unincorporated areas)
+  data.forEach(d => {
+    const key = `${d.city}, ${d.state}`;
+    const existing = cityData.get(key);
+    if (existing) {
+      existing.push(d);
+    } else {
+      cityData.set(key, [d]);
+    }
+  });
+
+  // Create convex hull for each city
+  const boundaries: CityBoundary[] = [];
+  
+  cityData.forEach((listings, key) => {
+    const [cityState, _] = key.split('|');
+    const [city, state] = cityState.split(', ');
+    
+    // Extract coordinates for convex hull computation
+    const points: [number, number][] = listings.map(listing => 
+      [listing.longitude, listing.latitude]
+    );
+    
+    // Compute convex hull
+    const hull = d3.polygonHull(points);
+    
+    if (hull && hull.length >= 3) {
+      boundaries.push({
+        city,
+        state,
+        hullPoints: hull as [number, number][],
+        totalListings: listings.length
+      });
+    } else if (points.length > 0) {
+      // Fallback for cities with 1-2 listings: create a small rectangular boundary
+      const lngs = points.map(p => p[0]);
+      const lats = points.map(p => p[1]);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      
+      // Add a small buffer (0.01 degrees, roughly 1km) around the point(s)
+      const buffer = 0.01;
+      const rectanglePoints: [number, number][] = [
+        [minLng - buffer, maxLat + buffer], // top-left
+        [maxLng + buffer, maxLat + buffer], // top-right
+        [maxLng + buffer, minLat - buffer], // bottom-right
+        [minLng - buffer, minLat - buffer]  // bottom-left
+      ];
+      
+      boundaries.push({
+        city,
+        state,
+        hullPoints: rectanglePoints,
+        totalListings: listings.length
+      });
+    }
+  });
+
+  if (MAP_CONFIG.DEBUG_LOG) {
+    console.log(`[aggregateCityBoundaries] Created ${boundaries.length} city boundaries`);
+  }
+
+  return boundaries;
 }
 
 /**

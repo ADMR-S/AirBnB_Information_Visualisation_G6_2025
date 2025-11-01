@@ -12,11 +12,16 @@ export interface NeighborhoodField {
   label: string;
   count: number;
   avgPrice: number;
-  minLat: number;
-  maxLat: number;
-  minLng: number;
-  maxLng: number;
+  // Polygon hull points [lng, lat]
+  hullPoints: [number, number][];
   listings: AirbnbListing[];
+}
+
+export interface CityBoundary {
+  city: string;
+  state: string;
+  hullPoints: [number, number][];
+  totalListings: number;
 }
 
 export interface AggregatedCityData {

@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import type { AirbnbListing, Persona } from '../../../types/airbnb.types';
-import { aggregateByCity, aggregateNeighborhoodFields, getMaxSizeValue } from './dataAggregators';
+import { aggregateByCity, aggregateNeighborhoodFields, aggregateCityBoundaries, getMaxSizeValue } from './dataAggregators';
 import { createProjection, createNullProjectionPath } from './mapUtils';
-import { makeBubbles, makeNeighborhoodFields, renderBaseMap } from './mapRenderers';
+import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap } from './mapRenderers';
 import { MAP_CONFIG } from './mapConfig';
 import '../VisualizationPage.css';
 import './BubbleMap.css';
@@ -43,14 +43,15 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
     // Create zoomable group
     const g = svg.append("g");
 
-    // Aggregate data by CITY and NEIGHBORHOOD
+    // Aggregate data by CITY, NEIGHBORHOOD, and CITY BOUNDARIES
     if (MAP_CONFIG.DEBUG_LOG) {
       console.log(`[BubbleMap] Processing ${filteredData.length} listings`);
     }
     const cityBubbles = aggregateByCity(filteredData);
     const neighborhoodFields = aggregateNeighborhoodFields(filteredData);
+    const cityBoundaries = aggregateCityBoundaries(filteredData);
     if (MAP_CONFIG.DEBUG_LOG) {
-      console.log(`[BubbleMap] Aggregated to ${cityBubbles.length} cities and ${neighborhoodFields.length} neighborhoods`);
+      console.log(`[BubbleMap] Aggregated to ${cityBubbles.length} cities, ${neighborhoodFields.length} neighborhoods, ${cityBoundaries.length} city boundaries`);
     }
 
     // Update max for consistent scaling
@@ -69,6 +70,7 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
       // Remove existing visualizations
       g.selectAll('.bubble').remove();
       g.selectAll('.neighborhood-fields').remove();
+      g.selectAll('.city-boundaries').remove();
 
       if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
         if (MAP_CONFIG.DEBUG_LOG) {
@@ -80,7 +82,9 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
         if (MAP_CONFIG.DEBUG_LOG) {
           console.log(`[BubbleMap] Rendering NEIGHBORHOOD fields (zoom >= ${MAP_CONFIG.zoom.cityThreshold})`);
         }
-        // Show neighborhoods as fields
+        // Show city boundaries first (behind neighborhoods)
+        makeCityBoundaries(g, projection, cityBoundaries);
+        // Then show neighborhoods as fields
         makeNeighborhoodFields(g, projection, neighborhoodFields);
       }
     }
