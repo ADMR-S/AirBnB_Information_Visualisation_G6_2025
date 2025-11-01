@@ -15,36 +15,12 @@ export default function HostParallelView() {
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const selectionCanvasRef = useRef<HTMLCanvasElement | null>(null); // Separate canvas for selection
 
   // toggle affichage complet vs échantillon
   const [renderAll, setRenderAll] = useState(false);
   
   // Filtre par host_name ou host_id
   const [hostFilter, setHostFilter] = useState('');
-  
-  // Tri du tableau
-  const [sortColumn, setSortColumn] = useState<keyof AirbnbListing | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
-  
-  // Ligne sélectionnée depuis le tableau
-  const [selectedListing, setSelectedListing] = useState<AirbnbListing | null>(null);
-
-  // Handle column sort - cycle through null -> asc -> desc -> null
-  const handleSort = (column: keyof AirbnbListing) => {
-    if (sortColumn !== column) {
-      // New column - start with ascending
-      setSortColumn(column);
-      setSortDirection('asc');
-    } else if (sortDirection === 'asc') {
-      // Same column, was ascending - switch to descending
-      setSortDirection('desc');
-    } else if (sortDirection === 'desc') {
-      // Same column, was descending - reset to neutral
-      setSortColumn(null);
-      setSortDirection(null);
-    }
-  };
 
   // dimensions utilisées (fixes ici)
   const dimensions: { key: keyof AirbnbListing; label: string }[] = [
@@ -71,52 +47,6 @@ export default function HostParallelView() {
       d.host_id?.toLowerCase().includes(searchTerm)
     );
   }, [filteredData, hostFilter]);
-
-  // Memoize samples to prevent resampling on selection change
-  const sampledData = useMemo(() => {
-    const data: AirbnbListing[] = dataFilteredByHost;
-    const TARGET = Math.min(12000, Math.max(2000, Math.round(data.length * 0.05)));
-    const groups = d3.group(data, (d: AirbnbListing) => d.room_type) as Map<string, AirbnbListing[]>;
-    const samples: AirbnbListing[] = [];
-    const total = data.length;
-    availRoomTypes.forEach((rt) => {
-      const group = groups.get(rt) || [];
-      const proportion = group.length / Math.max(1, total);
-      const k = Math.max(5, Math.round(proportion * TARGET));
-      const shuffled = d3.shuffle(group.slice()) as AirbnbListing[];
-      for (let i = 0; i < Math.min(k, shuffled.length); i++) samples.push(shuffled[i]);
-    });
-    return samples;
-  }, [dataFilteredByHost, availRoomTypes]); // Only resample when data or room types change, NOT on selection
-
-  // Sort and limit data for table display (top 100 rows)
-  const sortedTableData = useMemo(() => {
-    let data = [...dataFilteredByHost];
-    
-    if (sortColumn && sortDirection) {
-      data.sort((a, b) => {
-        const aVal = a[sortColumn];
-        const bVal = b[sortColumn];
-        
-        // Handle null/undefined values
-        if (aVal == null && bVal == null) return 0;
-        if (aVal == null) return 1;
-        if (bVal == null) return -1;
-        
-        // Compare values
-        let comparison = 0;
-        if (typeof aVal === 'number' && typeof bVal === 'number') {
-          comparison = aVal - bVal;
-        } else {
-          comparison = String(aVal).localeCompare(String(bVal));
-        }
-        
-        return sortDirection === 'asc' ? comparison : -comparison;
-      });
-    }
-    
-    return data.slice(0, 100);
-  }, [dataFilteredByHost, sortColumn, sortDirection]);
 
   // ---- REFS PERSISTANTS (créés une seule fois) ----
   const setupRef = useRef<{
@@ -243,17 +173,31 @@ export default function HostParallelView() {
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
 
-    // source des lignes en fonction des room types actifs + renderAll
+
+    // sampling stratifié (utilise dataFilteredByHost au lieu de filteredData)
     const data: AirbnbListing[] = dataFilteredByHost;
+    const TARGET = Math.min(12000, Math.max(2000, Math.round(data.length * 0.05)));
+    const groups = d3.group(data, (d: AirbnbListing) => d.room_type) as Map<string, AirbnbListing[]>;
+    const samples: AirbnbListing[] = [];
+    const total = data.length;
+    availRoomTypes.forEach((rt) => {
+      const group = groups.get(rt) || [];
+      const proportion = group.length / Math.max(1, total);
+      const k = Math.max(5, Math.round(proportion * TARGET));
+      const shuffled = d3.shuffle(group.slice()) as AirbnbListing[];
+      for (let i = 0; i < Math.min(k, shuffled.length); i++) samples.push(shuffled[i]);
+    });
+
+    // source des lignes en fonction des room types actifs + renderAll
     const sourceLines = renderAll
       ? (activeRoomTypes && activeRoomTypes.length > 0 ? data.filter(d => activeRoomTypes.includes(d.room_type)) : data)
-      : (activeRoomTypes && activeRoomTypes.length > 0 ? sampledData.filter(d => activeRoomTypes.includes(d.room_type)) : sampledData);
+      : (activeRoomTypes && activeRoomTypes.length > 0 ? samples.filter(d => activeRoomTypes.includes(d.room_type)) : samples);
 
     // dessin batched
     const chunkSize = 1500;
     let rafId: number | null = null;
 
-    const drawLine = (d: AirbnbListing, isSelected = false) => {
+    const drawLine = (d: AirbnbListing) => {
       ctx.beginPath();
       dimensions.forEach((p, i) => {
         const xPos = margin.left + (x(String(p.key)) ?? 0);
@@ -261,16 +205,9 @@ export default function HostParallelView() {
         if (i === 0) ctx.moveTo(xPos, yPos);
         else ctx.lineTo(xPos, yPos);
       });
-      
-      if (isSelected) {
-        ctx.strokeStyle = '#FFD700'; // Gold/yellow color
-        ctx.globalAlpha = 1;
-        ctx.lineWidth = 4.5; // Thicker line for selection
-      } else {
-        ctx.strokeStyle = colorBy(d.room_type) as string;
-        ctx.globalAlpha = 0.6; // Normal opacity for regular lines
-        ctx.lineWidth = 1.2;
-      }
+      ctx.strokeStyle = colorBy(d.room_type) as string;
+      ctx.globalAlpha = 0.6;
+      ctx.lineWidth = 1.2;
       ctx.stroke();
     };
 
@@ -278,13 +215,9 @@ export default function HostParallelView() {
       let i = 0;
       const step = () => {
         const end = Math.min(i + chunkSize, lines.length);
-        for (let j = i; j < end; j++) {
-          drawLine(lines[j], false); // Draw all lines normally, selection will be drawn separately
-        }
+        for (let j = i; j < end; j++) drawLine(lines[j]);
         i = end;
-        if (i < lines.length) {
-          rafId = requestAnimationFrame(step);
-        }
+        if (i < lines.length) rafId = requestAnimationFrame(step);
       };
       step();
     };
@@ -295,43 +228,7 @@ export default function HostParallelView() {
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [dataFilteredByHost, availRoomTypes, activeRoomTypes, renderAll, sampledData]); // Removed selectedListing from deps
-
-  // ---------- 3) DRAW SELECTED LINE on top (without full redraw) ----------
-  useEffect(() => {
-    const setup = setupRef.current;
-    const selCanvas = selectionCanvasRef.current;
-    if (!setup || !selCanvas) return;
-
-    const { margin, x, yScales } = setup;
-    
-    // Setup selection canvas with same dimensions as main canvas
-    const canvasEl = canvasRef.current;
-    if (!canvasEl) return;
-    
-    const { ctx: selCtx } = setupCanvas(selCanvas, canvasEl.clientWidth, canvasEl.clientHeight);
-    if (!selCtx) return;
-    
-    // Clear the selection canvas
-    clearBackingStore(selCtx, selCanvas);
-    
-    // Draw the selected line on the selection canvas only
-    if (selectedListing) {
-      selCtx.save();
-      selCtx.beginPath();
-      dimensions.forEach((p, i) => {
-        const xPos = margin.left + (x(String(p.key)) ?? 0);
-        const yPos = margin.top + yScales[p.key](Number(selectedListing[p.key] ?? 0));
-        if (i === 0) selCtx.moveTo(xPos, yPos);
-        else selCtx.lineTo(xPos, yPos);
-      });
-      selCtx.strokeStyle = '#FFD700'; // Gold/yellow color
-      selCtx.globalAlpha = 1;
-      selCtx.lineWidth = 4.5; // Thicker line for selection
-      selCtx.stroke();
-      selCtx.restore();
-    }
-  }, [selectedListing, dimensions]); // Only when selection changes
+  }, [dataFilteredByHost, availRoomTypes, activeRoomTypes, renderAll]); // ⬅️ redraw only
 
   // --- Stats (inchangées) ---
   const filteredByRoom = (activeRoomTypes && activeRoomTypes.length > 0)
@@ -416,7 +313,6 @@ export default function HostParallelView() {
 
       <div style={{ position: 'relative', width: '100%' }}>
         <canvas ref={canvasRef} className="parallel-canvas" />
-        <canvas ref={selectionCanvasRef} className="parallel-canvas" style={{ pointerEvents: 'none' }} />
         <svg ref={svgRef} className="parallel-svg" aria-label="Parallel coordinates chart" />
       </div>
 
@@ -506,79 +402,6 @@ export default function HostParallelView() {
                   );
                 })}
             </div>
-          </div>
-
-          {/* Data Table */}
-          <div className="data-table-container">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-              <h3 style={{ margin: 0 }}>
-                Data Table (First {sortedTableData.length} of {dataFilteredByHost.length} rows)
-                {selectedListing && <span style={{ color: '#FFD700', marginLeft: '0.5rem', fontWeight: 'bold' }}>● 1 selected</span>}
-              </h3>
-              {selectedListing && (
-                <button
-                  onClick={() => setSelectedListing(null)}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    backgroundColor: '#f44336',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '0.875rem',
-                  }}
-                >
-                  Clear Selection
-                </button>
-              )}
-            </div>
-            <p style={{ fontSize: '0.875rem', color: '#666', marginBottom: '1rem' }}>
-              💡 Click on any row to highlight it in the parallel coordinates chart above
-            </p>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {(Object.keys(sortedTableData[0] || {}) as Array<keyof AirbnbListing>).map((column) => (
-                    <th
-                      key={column}
-                      onClick={() => handleSort(column)}
-                      style={{
-                        backgroundColor: sortColumn === column ? '#f0f0f0' : 'transparent',
-                        fontWeight: sortColumn === column ? 'bold' : 'normal',
-                      }}
-                    >
-                      {column}
-                      {sortColumn === column && (
-                        <span style={{ marginLeft: '0.5rem' }}>
-                          {sortDirection === 'asc' ? '↑' : '↓'}
-                        </span>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {sortedTableData.map((row, idx) => (
-                  <tr 
-                    key={idx}
-                    onClick={() => setSelectedListing(row)}
-                    style={{
-                      cursor: 'pointer',
-                      backgroundColor: selectedListing === row ? '#FFFACD' : 'transparent', // Light yellow background
-                    }}
-                  >
-                    {(Object.keys(row) as Array<keyof AirbnbListing>).map((column) => (
-                      <td
-                        key={column}
-                        title={String(row[column])}
-                      >
-                        {row[column] != null ? String(row[column]) : '-'}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       </div>

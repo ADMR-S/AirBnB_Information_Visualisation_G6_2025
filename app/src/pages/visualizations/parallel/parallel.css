@@ -73,3 +73,12 @@
   background-color: #f9f9f9;
 }
 
+.data-table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.data-table tbody tr.selected {
+  background-color: #ffe6e6 !important;
+}
+
