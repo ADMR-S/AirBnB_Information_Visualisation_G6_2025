@@ -71,6 +71,9 @@ export function showListingPopup(
   popup.style.left = `${position[0]}px`;
   popup.style.top = `${position[1]}px`;
   
+  // Store the listing ID as a data attribute for easy access
+  popup.setAttribute('data-listing-id', listing.id);
+  
   popup.innerHTML = `
     <div class="listing-popup-header">
       <span class="listing-popup-drag-handle">☰</span>
@@ -132,6 +135,80 @@ export function showListingPopup(
 }
 
 /**
+ * Gets the currently selected listing ID from the popup if it exists
+ * @returns The selected listing ID or null
+ */
+export function getSelectedListingId(): string | null {
+  const popup = document.querySelector('.listing-popup');
+  return popup ? popup.getAttribute('data-listing-id') : null;
+}
+
+/**
+ * Renders or updates the selected listing bubble without fisheye effect
+ * @param container D3 selection of the container element
+ * @param listings Array of all listings
+ * @param projection D3 geo projection
+ * @param zoomLevel Current zoom level
+ */
+export function updateSelectedListing(
+  container: d3.Selection<SVGGElement, unknown, null, undefined>,
+  listings: AirbnbListing[],
+  projection: d3.GeoProjection,
+  zoomLevel: number
+): void {
+  const selectedListingId = getSelectedListingId();
+  
+  if (!selectedListingId) {
+    // No selection, remove any selected listing bubble
+    container.selectAll('.selected-listing').remove();
+    return;
+  }
+  
+  // Find the selected listing
+  const selectedListing = listings.find(l => l.id === selectedListingId);
+  if (!selectedListing) {
+    container.selectAll('.selected-listing').remove();
+    return;
+  }
+  
+  // Project the listing
+  const projected = projection([selectedListing.longitude, selectedListing.latitude]);
+  if (!projected) {
+    container.selectAll('.selected-listing').remove();
+    return;
+  }
+  
+  // Calculate bubble radius based on zoom level
+  const baseBubbleRadius = MAP_CONFIG.fisheye.listingBubbleRadius;
+  const listingBubbleRadius = baseBubbleRadius / Math.sqrt(zoomLevel);
+  
+  // Get or create fisheye group
+  let fisheyeGroup = container.select<SVGGElement>('g.fisheye-listings-group');
+  if (fisheyeGroup.empty()) {
+    fisheyeGroup = container.append('g').attr('class', 'fisheye-listings-group');
+  }
+  
+  // Update or create selected listing bubble (no fisheye distortion)
+  let selectedBubble = fisheyeGroup.select<SVGCircleElement>('.selected-listing');
+  
+  if (selectedBubble.empty()) {
+    selectedBubble = fisheyeGroup.append('circle')
+      .attr('class', 'fisheye-listing selected-listing')
+      .attr('fill', '#FF5722')
+      .attr('fill-opacity', 0.9)
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 0.5)
+      .style('cursor', 'pointer')
+      .style('pointer-events', 'none');
+  }
+  
+  selectedBubble
+    .attr('cx', projected[0])
+    .attr('cy', projected[1])
+    .attr('r', listingBubbleRadius);
+}
+
+/**
  * Renders individual listing bubbles within fisheye lens
  * @param container D3 selection of the container element
  * @param listings Array of listings to render
@@ -146,8 +223,11 @@ export function renderFisheyeListings(
   fisheyeFocus: [number, number],
   zoomLevel: number
 ): void {
-  // Remove existing fisheye elements
-  container.selectAll('.fisheye-listing').remove();
+  // Get currently selected listing ID
+  const selectedListingId = getSelectedListingId();
+  
+  // Remove existing non-selected fisheye listings
+  container.selectAll('.fisheye-listing:not(.selected-listing)').remove();
   container.selectAll('.fisheye-lens-circle').remove();
   
   const fisheyeRadius = getFisheyeRadius(zoomLevel);
@@ -164,7 +244,8 @@ export function renderFisheyeListings(
     .style('pointer-events', 'none');
   
   // Project listings and filter those within fisheye radius
-  const projectedListings = listings
+  type ProjectedListing = { listing: AirbnbListing; projected: [number, number] };
+  const projectedListings: ProjectedListing[] = listings
     .map(listing => {
       const projected = projection([listing.longitude, listing.latitude]);
       if (!projected) return null;
@@ -177,23 +258,32 @@ export function renderFisheyeListings(
       
       return { listing, projected };
     })
-    .filter((d): d is { listing: AirbnbListing; projected: [number, number] } => d !== null);
+    .filter((d): d is ProjectedListing => d !== null);
   
-  // Create a group for fisheye listings
-  const fisheyeGroup = container.append('g').attr('class', 'fisheye-listings-group');
+  // Separate selected and non-selected listings
+  const nonSelectedListings = projectedListings.filter(d => d.listing.id !== selectedListingId);
+  const selectedListingData = selectedListingId 
+    ? projectedListings.find(d => d.listing.id === selectedListingId)
+    : null;
   
-  // Render individual listing bubbles
+  // Create or get fisheye listings group
+  let fisheyeGroup = container.select<SVGGElement>('g.fisheye-listings-group');
+  if (fisheyeGroup.empty()) {
+    fisheyeGroup = container.append('g').attr('class', 'fisheye-listings-group');
+  }
+  
+  // Render non-selected listing bubbles
   fisheyeGroup
-    .selectAll<SVGCircleElement, typeof projectedListings[0]>('circle.fisheye-listing')
-    .data(projectedListings)
+    .selectAll<SVGCircleElement, ProjectedListing>('circle.fisheye-listing:not(.selected-listing)')
+    .data(nonSelectedListings)
     .enter()
     .append('circle')
     .attr('class', 'fisheye-listing')
-    .attr('cx', d => {
+    .attr('cx', (d: ProjectedListing) => {
       const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
       return distorted.x;
     })
-    .attr('cy', d => {
+    .attr('cy', (d: ProjectedListing) => {
       const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
       return distorted.y;
     })
@@ -203,27 +293,97 @@ export function renderFisheyeListings(
     .attr('stroke', '#fff')
     .attr('stroke-width', 0.15)
     .style('cursor', 'pointer')
-    .on('click', function(event: MouseEvent, d) {
+    .on('click', function(event: MouseEvent, d: ProjectedListing) {
       event.stopPropagation();
       const rect = (event.target as SVGCircleElement).getBoundingClientRect();
       showListingPopup(
         d.listing,
         [rect.left + rect.width / 2, rect.top + rect.height / 2],
         () => {
-          // Popup closed callback
+          // Popup closed - remove selected listing bubble
+          fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing').remove();
         }
       );
+      
+      // Remove old selected listing and create new one
+      fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing').remove();
+      
+      // Create selected listing bubble with fisheye distortion
+      const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
+      fisheyeGroup.append('circle')
+        .attr('class', 'fisheye-listing selected-listing')
+        .attr('cx', distorted.x)
+        .attr('cy', distorted.y)
+        .attr('r', listingBubbleRadius)
+        .attr('fill', '#FF5722')
+        .attr('fill-opacity', 0.9)
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 0.5)
+        .style('pointer-events', 'none'); // Prevent interaction with selected bubble
     })
-    .on('mouseover', function() {
+    .on('mouseover', function(this: SVGCircleElement) {
       d3.select(this)
         .attr('fill', '#FF5722')
         .attr('r', listingBubbleRadius * 1.5);
     })
-    .on('mouseout', function() {
+    .on('mouseout', function(this: SVGCircleElement) {
       d3.select(this)
         .attr('fill', '#2196F3')
         .attr('r', listingBubbleRadius);
     });
+  
+  // Render or update selected listing if it exists
+  // First check if it's in the fisheye radius
+  if (selectedListingData) {
+    // Selected listing is inside fisheye - render with distortion
+    const distorted = fisheye(
+      selectedListingData.projected[0], 
+      selectedListingData.projected[1], 
+      fisheyeFocus, 
+      fisheyeRadius
+    );
+    
+    // Remove any existing selected listing
+    fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing').remove();
+    
+    // Create selected listing bubble with fisheye distortion
+    fisheyeGroup.append('circle')
+      .attr('class', 'fisheye-listing selected-listing')
+      .attr('cx', distorted.x)
+      .attr('cy', distorted.y)
+      .attr('r', listingBubbleRadius)
+      .attr('fill', '#FF5722')
+      .attr('fill-opacity', 0.9)
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 0.5)
+      .style('pointer-events', 'none');
+  } else if (selectedListingId) {
+    // Selected listing exists but is outside fisheye - keep it at original position
+    const selectedListing = listings.find(l => l.id === selectedListingId);
+    if (selectedListing) {
+      const projected = projection([selectedListing.longitude, selectedListing.latitude]);
+      if (projected) {
+        // Check if there's already a selected bubble, if not create one
+        let selectedBubble = fisheyeGroup.select<SVGCircleElement>('.selected-listing');
+        
+        if (selectedBubble.empty()) {
+          selectedBubble = fisheyeGroup.append('circle')
+            .attr('class', 'fisheye-listing selected-listing')
+            .attr('fill', '#FF5722')
+            .attr('fill-opacity', 0.9)
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 0.5)
+            .style('pointer-events', 'none');
+        }
+        
+        // Update position without fisheye distortion
+        selectedBubble
+          .attr('cx', projected[0])
+          .attr('cy', projected[1])
+          .attr('r', listingBubbleRadius);
+      }
+    }
+  }
 }
 
 /**

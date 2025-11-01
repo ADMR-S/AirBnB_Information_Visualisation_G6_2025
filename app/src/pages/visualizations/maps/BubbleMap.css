@@ -101,6 +101,24 @@
   transition: r 0.2s ease, fill 0.2s ease;
 }
 
+.fisheye-listing.selected-listing {
+  fill: #FF5722 !important;
+  fill-opacity: 0.9 !important;
+  stroke: #fff !important;
+  stroke-width: 0.5 !important;
+  pointer-events: none;
+}
+
+.fisheye-listings-group {
+  /* Ensure selected listings are rendered above other map elements */
+  pointer-events: none;
+}
+
+.fisheye-listings-group circle:not(.selected-listing) {
+  /* Re-enable pointer events for non-selected listings */
+  pointer-events: auto;
+}
+
 .listing-popup {
   position: fixed;
   background: white;

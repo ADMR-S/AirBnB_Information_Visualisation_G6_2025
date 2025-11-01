@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import type { AirbnbListing, Persona } from '../../../types/airbnb.types';
-import { aggregateByCity, aggregateNeighborhoodFields, aggregateCityBoundaries, getMaxSizeValue } from './dataAggregators';
+import { useAggregatedData } from "../../../hooks/useAggregatedData";
 import { createProjection, createNullProjectionPath } from './mapUtils';
 import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap } from './mapRenderers';
-import { renderFisheyeListings, applyFisheyeToBasemap, restoreBasemapPaths, getFisheyeRadius } from './fisheyeUtils';
+import { renderFisheyeListings, applyFisheyeToBasemap, restoreBasemapPaths, getFisheyeRadius, updateSelectedListing } from './fisheyeUtils';
 import { MAP_CONFIG } from './mapConfig';
 import '../VisualizationPage.css';
 import './BubbleMap.css';
@@ -24,6 +24,9 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
   const originalPathsRef = useRef<Map<SVGPathElement | SVGPolygonElement, string>>(new Map());
   const [fisheyeActive, setFisheyeActive] = useState(false);
   const [fisheyePosition, setFisheyePosition] = useState<[number, number]>([0, 0]);
+
+  // Aggregate data at the component level (must be called at top level, not inside useEffect)
+  const { cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount } = useAggregatedData(filteredData);
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current || filteredData.length === 0) return;
@@ -62,22 +65,15 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
     // Create zoomable group
     const g = svg.append("g");
 
-    // Aggregate data by CITY, NEIGHBORHOOD, and CITY BOUNDARIES
+    // Log aggregated data
     if (MAP_CONFIG.DEBUG_LOG) {
       console.log(`[BubbleMap] Processing ${filteredData.length} listings`);
-    }
-    const cityBubbles = aggregateByCity(filteredData);
-    const neighborhoodFields = aggregateNeighborhoodFields(filteredData);
-    const cityBoundaries = aggregateCityBoundaries(filteredData);
-    if (MAP_CONFIG.DEBUG_LOG) {
       console.log(`[BubbleMap] Aggregated to ${cityBubbles.length} cities, ${neighborhoodFields.length} neighborhoods, ${cityBoundaries.length} city boundaries`);
     }
-
-    // Update max for consistent scaling
-    const cityMax = getMaxSizeValue(cityBubbles);
     
-    if (cityMax > maxCityCountRef.current) {
-      maxCityCountRef.current = cityMax;
+    // Update max for consistent scaling
+    if (maxCityCount > maxCityCountRef.current) {
+      maxCityCountRef.current = maxCityCount;
     }
 
     // Function to render based on zoom level
@@ -97,6 +93,8 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
         }
         // Show cities as bubbles
         makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
+        // Show selected listing at city level too
+        updateSelectedListing(g, filteredData, projection, zoomLevel);
       } else {
         if (MAP_CONFIG.DEBUG_LOG) {
           console.log(`[BubbleMap] Rendering NEIGHBORHOOD fields (zoom >= ${MAP_CONFIG.zoom.cityThreshold})`);
@@ -127,10 +125,18 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
           
           // Clean up fisheye elements when zooming out to city level
           if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
-            g.selectAll('.fisheye-listings-group').remove();
+            // Remove fisheye-specific elements but keep selected listing
+            g.selectAll('.fisheye-listing:not(.selected-listing)').remove();
             g.selectAll('.fisheye-lens-circle').remove();
             restoreBasemapPaths(g, originalPathsRef.current);
             setFisheyeActive(false);
+            // Update selected listing for city level view
+            updateSelectedListing(g, filteredData, projection, zoomLevel);
+          } else {
+            // Zoomed into neighborhood level - show selected listing if any
+            if (!fisheyeActive) {
+              updateSelectedListing(g, filteredData, projection, zoomLevel);
+            }
           }
         }
         
@@ -171,8 +177,7 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
           // Apply fisheye distortion to base map
           applyFisheyeToBasemap(g, [mouseX, mouseY], fisheyeRadius, originalPathsRef.current);
           
-          // Render fisheye listings
-          g.selectAll('.fisheye-listings-group').remove();
+          // Render fisheye listings (this will handle the selected listing too)
           renderFisheyeListings(g, filteredData, projection, [mouseX, mouseY], currentZoomRef.current);
         } else {
           setFisheyeActive(false);
@@ -184,7 +189,15 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
       svg.on('mouseleave', function() {
         setFisheyeActive(false);
         restoreBasemapPaths(g, originalPathsRef.current);
-        g.selectAll('.fisheye-listings-group').remove();
+        // Remove non-selected listings but keep selected listing if any
+        g.selectAll('.fisheye-listing:not(.selected-listing)').remove();
+        g.selectAll('.fisheye-lens-circle').remove();
+        
+        // Update selected listing position without fisheye distortion
+        const zoomLevel = currentZoomRef.current;
+        if (zoomLevel >= MAP_CONFIG.zoom.cityThreshold) {
+          updateSelectedListing(g, filteredData, projection, zoomLevel);
+        }
       });
     }
 
@@ -202,7 +215,7 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
       // Note: We don't remove popups or reset state to preserve user's view
       // Popups will have their event listeners re-attached on next mount
     };
-  }, [filteredData, persona]);
+  }, [filteredData, persona, cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount]);
 
   function handleZoomIn() {
     if (!svgRef.current || !zoomBehaviorRef.current) return;
