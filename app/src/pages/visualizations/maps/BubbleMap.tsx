@@ -60,6 +60,9 @@ function makeBubbles(
     };
   });
 
+  // Sort by size (largest first) so large bubbles are drawn behind small ones
+  projectedBubbles.sort((a, b) => b.sizeValue - a.sizeValue);
+
   // Draw bubbles
   container.append("g")
     .attr("class", "bubble")
@@ -268,8 +271,9 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
     }));
 
     // Update max for consistent scaling
-    const cityMax = Math.max(...cityBubbles.map(b => b.sizeValue), 1);
-    const neighborhoodMax = Math.max(...neighborhoodBubbles.map(b => b.sizeValue), 1);
+    // Use reduce instead of Math.max(...array) to avoid call stack issues with large datasets
+    const cityMax = cityBubbles.reduce((max, b) => Math.max(max, b.sizeValue), 1);
+    const neighborhoodMax = neighborhoodBubbles.reduce((max, b) => Math.max(max, b.sizeValue), 1);
     
     if (cityMax > maxCityCountRef.current) {
       maxCityCountRef.current = cityMax;
