@@ -28,6 +28,21 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
   useEffect(() => {
     if (!svgRef.current || !containerRef.current || filteredData.length === 0) return;
 
+    // Re-attach event listeners to any existing popups
+    const existingPopups = document.querySelectorAll('.listing-popup');
+    existingPopups.forEach(popup => {
+      const closeButton = popup.querySelector('.listing-popup-close');
+      if (closeButton) {
+        // Remove old listeners by cloning and replacing
+        const newCloseButton = closeButton.cloneNode(true);
+        closeButton.parentNode?.replaceChild(newCloseButton, closeButton);
+        // Add fresh listener
+        newCloseButton.addEventListener('click', () => {
+          popup.remove();
+        });
+      }
+    });
+
     const container = containerRef.current;
     const width = container.clientWidth || MAP_CONFIG.defaultWidth;
     const height = MAP_CONFIG.defaultHeight;
@@ -178,6 +193,15 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
       renderVisualization(1);
     });
 
+    // Cleanup function
+    return () => {
+      // Remove all event listeners to prevent memory leaks
+      svg.on('mousemove', null);
+      svg.on('mouseleave', null);
+      
+      // Note: We don't remove popups or reset state to preserve user's view
+      // Popups will have their event listeners re-attached on next mount
+    };
   }, [filteredData, persona]);
 
   function handleZoomIn() {
