@@ -1,0 +1,29 @@
+export const MAP_CONFIG = {
+  defaultWidth: 960,
+  defaultHeight: 600,
+  projection: {
+    scale: 1280,
+    translate: [480, 300] as [number, number] // [width/2, height/2]
+  },
+  zoom: {
+    scaleExtent: [1, 8] as [number, number],
+    cityThreshold: 3,
+    transitionDuration: 300,
+    zoomFactor: 1.5
+  },
+  bubbles: {
+    citySizeRange: [3, 25] as [number, number],
+    neighborhoodSizeRange: [2, 20] as [number, number],
+    fillOpacity: 0.6,
+    strokeColor: '#fff',
+    strokeWidth: 0.5
+  },
+  colors: {
+    interpolateRange: [0.4, 1.0] as [number, number] // Range for d3.interpolateBlues
+  },
+  neighborhoodFields: {
+    fillOpacity: 0.4,
+    strokeWidth: 2,
+    strokeOpacity: 0.8
+  }
+};
