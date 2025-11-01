@@ -1,4 +1,4 @@
-//@ts-ignore
+﻿//@ts-ignore
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 // @ts-ignore - d3 types are not installed in project (dev-dependency) — treat as any
 import * as d3 from 'd3';
@@ -18,6 +18,29 @@ export default function HostParallelView() {
 
   // toggle affichage complet vs échantillon
   const [renderAll, setRenderAll] = useState(false);
+  
+  // Filtre par host_name ou host_id
+  const [hostFilter, setHostFilter] = useState('');
+  
+  // Tri du tableau
+  const [sortColumn, setSortColumn] = useState<keyof AirbnbListing | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
+
+  // Handle column sort - cycle through null -> asc -> desc -> null
+  const handleSort = (column: keyof AirbnbListing) => {
+    if (sortColumn !== column) {
+      // New column - start with ascending
+      setSortColumn(column);
+      setSortDirection('asc');
+    } else if (sortDirection === 'asc') {
+      // Same column, was ascending - switch to descending
+      setSortDirection('desc');
+    } else if (sortDirection === 'desc') {
+      // Same column, was descending - reset to neutral
+      setSortColumn(null);
+      setSortDirection(null);
+    }
+  };
 
   // dimensions utilisées (fixes ici)
   const dimensions: { key: keyof AirbnbListing; label: string }[] = [
@@ -34,6 +57,45 @@ export default function HostParallelView() {
     () => Array.from(new Set(filteredData.map(d => d.room_type))).sort(),
     [filteredData]
   );
+
+  // Données filtrées par host_name ou host_id (si un filtre est actif)
+  const dataFilteredByHost = useMemo(() => {
+    if (!hostFilter.trim()) return filteredData;
+    const searchTerm = hostFilter.toLowerCase().trim();
+    return filteredData.filter(d => 
+      d.host_name?.toLowerCase().includes(searchTerm) ||
+      d.host_id?.toLowerCase().includes(searchTerm)
+    );
+  }, [filteredData, hostFilter]);
+
+  // Sort and limit data for table display (top 100 rows)
+  const sortedTableData = useMemo(() => {
+    let data = [...dataFilteredByHost];
+    
+    if (sortColumn && sortDirection) {
+      data.sort((a, b) => {
+        const aVal = a[sortColumn];
+        const bVal = b[sortColumn];
+        
+        // Handle null/undefined values
+        if (aVal == null && bVal == null) return 0;
+        if (aVal == null) return 1;
+        if (bVal == null) return -1;
+        
+        // Compare values
+        let comparison = 0;
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          comparison = aVal - bVal;
+        } else {
+          comparison = String(aVal).localeCompare(String(bVal));
+        }
+        
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+    }
+    
+    return data.slice(0, 100);
+  }, [dataFilteredByHost, sortColumn, sortDirection]);
 
   // ---- REFS PERSISTANTS (créés une seule fois) ----
   const setupRef = useRef<{
@@ -156,13 +218,13 @@ export default function HostParallelView() {
   // clear full backing store regardless of current transform
   clearBackingStore(ctx, canvasEl);
 
-    // 2) on remet un état “propre” de peinture (au cas où)
+    // 2) on remet un état "propre" de peinture (au cas où)
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
 
 
-    // sampling stratifié
-    const data: AirbnbListing[] = filteredData;
+    // sampling stratifié (utilise dataFilteredByHost au lieu de filteredData)
+    const data: AirbnbListing[] = dataFilteredByHost;
     const TARGET = Math.min(12000, Math.max(2000, Math.round(data.length * 0.05)));
     const groups = d3.group(data, (d: AirbnbListing) => d.room_type) as Map<string, AirbnbListing[]>;
     const samples: AirbnbListing[] = [];
@@ -215,12 +277,12 @@ export default function HostParallelView() {
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [filteredData, availRoomTypes, activeRoomTypes, renderAll]); // ⬅️ redraw only
+  }, [dataFilteredByHost, availRoomTypes, activeRoomTypes, renderAll]); // ⬅️ redraw only
 
   // --- Stats (inchangées) ---
   const filteredByRoom = (activeRoomTypes && activeRoomTypes.length > 0)
-    ? filteredData.filter(d => activeRoomTypes.includes(d.room_type))
-    : filteredData;
+    ? dataFilteredByHost.filter(d => activeRoomTypes.includes(d.room_type))
+    : dataFilteredByHost;
 
   const statsFor = (arr: number[]) => {
     if (!arr || arr.length === 0) return { count: 0, mean: NaN, median: NaN, std: NaN, min: NaN, max: NaN };
@@ -253,7 +315,50 @@ export default function HostParallelView() {
   return (
     <div className="viz-container">
       <h2>Performance Comparison</h2>
-      <p className="viz-description">Compare metrics across listings ({filteredData.length.toLocaleString()} properties)</p>
+      <p className="viz-description">
+        Compare metrics across listings ({filteredData.length.toLocaleString()} properties)
+        {hostFilter && ` — Filtered by host: "${hostFilter}" (${dataFilteredByHost.length} results)`}
+      </p>
+
+      {/* Filtre par host_name ou host_id */}
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <label htmlFor="host-search" style={{ fontSize: 14, fontWeight: 500 }}>
+          Filter by Host Name or ID:
+        </label>
+        <input
+          id="host-search"
+          type="text"
+          value={hostFilter}
+          onChange={(e) => setHostFilter(e.target.value)}
+          placeholder="Enter host name or ID..."
+          style={{
+            padding: '8px 12px',
+            borderRadius: 6,
+            border: '1px solid rgba(0,0,0,0.12)',
+            fontSize: 14,
+            minWidth: 250,
+            outline: 'none',
+          }}
+          onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+          onBlur={(e) => e.target.style.borderColor = 'rgba(0,0,0,0.12)'}
+        />
+        {hostFilter && (
+          <button
+            onClick={() => setHostFilter('')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 6,
+              border: '1px solid rgba(0,0,0,0.08)',
+              background: '#fff',
+              cursor: 'pointer',
+              fontSize: 13,
+            }}
+            title="Clear filter"
+          >
+            Clear
+          </button>
+        )}
+      </div>
 
       <div style={{ position: 'relative', width: '100%' }}>
         <canvas ref={canvasRef} className="parallel-canvas" />
@@ -271,7 +376,7 @@ export default function HostParallelView() {
         </button>
         {renderAll && (
           <div style={{ fontSize: 12, color: '#a33' }}>
-            Affichage complet: {filteredData.length.toLocaleString()} lignes — peut être lent
+            Affichage complet: {dataFilteredByHost.length.toLocaleString()} lignes — peut être lent
           </div>
         )}
       </div>
@@ -299,7 +404,7 @@ export default function HostParallelView() {
         <h3 style={{ margin: '0 0 8px 0' }}>Données affichées — analyse rapide</h3>
         <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div style={{ minWidth: 260 }}>
-            <div style={{ fontSize: 13, marginBottom: 6 }}>Total (après filtres): <strong>{filteredData.length.toLocaleString()}</strong></div>
+            <div style={{ fontSize: 13, marginBottom: 6 }}>Total (après filtres): <strong>{dataFilteredByHost.length.toLocaleString()}</strong></div>
             <div style={{ fontSize: 13, marginBottom: 12 }}>Échantillon estimé dessiné: <strong>{sampleEstimate.toLocaleString()}</strong></div>
 
             <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
@@ -346,6 +451,50 @@ export default function HostParallelView() {
                   );
                 })}
             </div>
+          </div>
+
+          {/* Data Table */}
+          <div className="data-table-container">
+            <h3 style={{ marginBottom: '1rem' }}>
+              Data Table (First {sortedTableData.length} of {dataFilteredByHost.length} rows)
+            </h3>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  {(Object.keys(sortedTableData[0] || {}) as Array<keyof AirbnbListing>).map((column) => (
+                    <th
+                      key={column}
+                      onClick={() => handleSort(column)}
+                      style={{
+                        backgroundColor: sortColumn === column ? '#f0f0f0' : 'transparent',
+                        fontWeight: sortColumn === column ? 'bold' : 'normal',
+                      }}
+                    >
+                      {column}
+                      {sortColumn === column && (
+                        <span style={{ marginLeft: '0.5rem' }}>
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sortedTableData.map((row, idx) => (
+                  <tr key={idx}>
+                    {(Object.keys(row) as Array<keyof AirbnbListing>).map((column) => (
+                      <td
+                        key={column}
+                        title={String(row[column])}
+                      >
+                        {row[column] != null ? String(row[column]) : '-'}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
