@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import type { AirbnbListing, Persona } from '../../../types/airbnb.types';
 import { useAggregatedData } from "../../../hooks/useAggregatedData";
+import { useSelectedListing } from '../../../contexts/SelectedListingContext';
 import { createProjection, createNullProjectionPath } from './mapUtils';
 import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap } from './mapRenderers';
 import { renderFisheyeListings, applyFisheyeToBasemap, restoreBasemapPaths, getFisheyeRadius, updateSelectedListing } from './fisheyeUtils';
 import { MAP_CONFIG } from './mapConfig';
+import ListingDetails from '../../../components/ListingDetails';
 import '../VisualizationPage.css';
 import './BubbleMap.css';
 
@@ -13,9 +15,10 @@ interface BubbleMapProps {
   filteredData: AirbnbListing[];
   persona: Persona;
   isLoading: boolean;
+  injectedListing?: AirbnbListing | null;
 }
 
-export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMapProps) {
+export default function BubbleMap({ filteredData, persona, isLoading, injectedListing }: BubbleMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const maxCityCountRef = useRef<number>(0);
@@ -28,9 +31,35 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
   const initializedRef = useRef<boolean>(false);
   const [fisheyeActive, setFisheyeActive] = useState(false);
   const [fisheyePosition, setFisheyePosition] = useState<[number, number]>([0, 0]);
+  
+  // Use context for selected listing management
+  const { selectedListing, setSelectedListing } = useSelectedListing();
+  const selectedListingRef = useRef<AirbnbListing | null>(null);
+  const setSelectedListingRef = useRef<(listing: AirbnbListing | null) => void>(setSelectedListing);
+  
+  // Keep refs in sync with context
+  useEffect(() => {
+    selectedListingRef.current = selectedListing;
+    setSelectedListingRef.current = setSelectedListing;
+  }, [selectedListing, setSelectedListing]);
 
   // Aggregate data at the component level (must be called at top level, not inside useEffect)
   const { cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount } = useAggregatedData(filteredData);
+
+  // Handle injected listing (from context or props)
+  useEffect(() => {
+    if (injectedListing) {
+      setSelectedListing(injectedListing);
+      // Don't show popup for injected listings per requirements
+      // The selected listing will be displayed below the map
+      
+      // Update the visualization to show the selected listing
+      if (gRef.current && projectionRef.current) {
+        const zoomLevel = currentZoomRef.current;
+        updateSelectedListing(gRef.current, filteredData, projectionRef.current, zoomLevel, injectedListing);
+      }
+    }
+  }, [injectedListing, setSelectedListing, filteredData]);
 
   // Initialization effect - runs once
   useEffect(() => {
@@ -78,7 +107,7 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
         // Show cities as bubbles
         makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
         // Show selected listing at city level too
-        updateSelectedListing(g, filteredData, projection, zoomLevel);
+        updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
       } else {
         if (MAP_CONFIG.DEBUG_LOG) {
           console.log(`[BubbleMap] Rendering NEIGHBORHOOD fields (zoom >= ${MAP_CONFIG.zoom.cityThreshold})`);
@@ -119,11 +148,11 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
             restoreBasemapPaths(g, originalPathsRef.current);
             setFisheyeActive(false);
             // Update selected listing for city level view
-            updateSelectedListing(g, filteredData, projection, zoomLevel);
+            updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
           } else {
             // Zoomed into neighborhood level - show selected listing if any
             if (!fisheyeActive) {
-              updateSelectedListing(g, filteredData, projection, zoomLevel);
+              updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
             }
           }
         }
@@ -137,7 +166,7 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
           
           // Re-render fisheye listings with updated zoom
           g.selectAll('.fisheye-listings-group').remove();
-          renderFisheyeListings(g, filteredData, projection, fisheyePosition, zoomLevel);
+          renderFisheyeListings(g, filteredData, projection, fisheyePosition, zoomLevel, setSelectedListingRef.current);
         }
       });
 
@@ -166,7 +195,7 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
           applyFisheyeToBasemap(g, [mouseX, mouseY], fisheyeRadius, originalPathsRef.current);
           
           // Render fisheye listings (this will handle the selected listing too)
-          renderFisheyeListings(g, filteredData, projection, [mouseX, mouseY], currentZoomRef.current);
+          renderFisheyeListings(g, filteredData, projection, [mouseX, mouseY], currentZoomRef.current, setSelectedListingRef.current);
         } else {
           setFisheyeActive(false);
           restoreBasemapPaths(g, originalPathsRef.current);
@@ -184,7 +213,7 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
         // Update selected listing position without fisheye distortion
         const zoomLevel = currentZoomRef.current;
         if (zoomLevel >= MAP_CONFIG.zoom.cityThreshold) {
-          updateSelectedListing(g, filteredData, projection, zoomLevel);
+          updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
         }
       });
     }
@@ -220,6 +249,8 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
         closeButton.parentNode?.replaceChild(newCloseButton, closeButton);
         newCloseButton.addEventListener('click', () => {
           popup.remove();
+          // Don't clear selection - keep the listing selected below the map
+          // g.selectAll('.selected-listing').remove(); // Keep the selected listing visible
         });
       }
     });
@@ -251,7 +282,7 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
           console.log(`[BubbleMap] Rendering CITY bubbles (zoom < ${MAP_CONFIG.zoom.cityThreshold})`);
         }
         makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
-        updateSelectedListing(g, filteredData, projection, zoomLevel);
+        updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
       } else {
         if (MAP_CONFIG.DEBUG_LOG) {
           console.log(`[BubbleMap] Rendering NEIGHBORHOOD fields (zoom >= ${MAP_CONFIG.zoom.cityThreshold})`);
@@ -319,6 +350,25 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
           </button>
         </div>
       </div>
+      
+      {selectedListing && (
+        <ListingDetails 
+          listing={selectedListing} 
+          persona={persona}
+          onClear={() => {
+            setSelectedListing(null);
+            // Remove any popup
+            const popup = document.querySelector('.listing-popup');
+            if (popup) {
+              popup.remove();
+            }
+            // Remove selected listing visualization
+            if (gRef.current) {
+              gRef.current.selectAll('.selected-listing').remove();
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

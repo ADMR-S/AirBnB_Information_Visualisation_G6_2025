@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useData } from './hooks/useData';
 import { HostSelectionProvider } from './contexts/HostSelectionContext';
+import { SelectedListingProvider } from './contexts/SelectedListingContext';
 import Landing from './pages/Landing';
 import TravelerDashboard from './pages/TravelerDashboard';
 import HostDashboard from './pages/HostDashboard';
@@ -18,9 +19,10 @@ function App() {
 
   return (
     <HostSelectionProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Landing />} />
+      <SelectedListingProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Landing />} />
 
           <Route path="/traveler" element={<TravelerDashboard />}>
             <Route index element={<Navigate to="map" replace />} />
@@ -39,6 +41,7 @@ function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      </SelectedListingProvider>
     </HostSelectionProvider>
   );
 }

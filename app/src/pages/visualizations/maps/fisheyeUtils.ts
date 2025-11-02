@@ -66,12 +66,14 @@ export function fisheye(
  * Shows a movable popup with listing details
  * @param listing The Airbnb listing data
  * @param position Initial position [x, y]
- * @param onClose Callback when popup is closed
+ * @param onClose Callback when popup is closed (includes clearing selection)
+ * @param onSelect Callback when listing is selected
  */
 export function showListingPopup(
   listing: AirbnbListing,
   position: [number, number],
-  onClose: () => void
+  onClose: () => void,
+  onSelect?: (listing: AirbnbListing | null) => void
 ): HTMLDivElement {
   // Remove any existing popup
   const existingPopup = document.querySelector('.listing-popup');
@@ -105,6 +107,11 @@ export function showListingPopup(
   `;
   
   document.body.appendChild(popup);
+  
+  // Call onSelect immediately to update context
+  if (onSelect) {
+    onSelect(listing);
+  }
   
   // Make popup draggable
   let isDragging = false;
@@ -141,6 +148,8 @@ export function showListingPopup(
   const closeButton = popup.querySelector('.listing-popup-close') as HTMLElement;
   closeButton.addEventListener('click', () => {
     popup.remove();
+    // Don't clear selection - the listing remains selected
+    // User can clear it using the clear button in ListingDetails below the map
     onClose();
   });
   
@@ -162,24 +171,29 @@ export function getSelectedListingId(): string | null {
  * @param listings Array of all listings
  * @param projection D3 geo projection
  * @param zoomLevel Current zoom level
+ * @param injectedSelectedListing Optional selected listing from context
  */
 export function updateSelectedListing(
   container: d3.Selection<SVGGElement, unknown, null, undefined>,
   listings: AirbnbListing[],
   projection: d3.GeoProjection,
-  zoomLevel: number
+  zoomLevel: number,
+  injectedSelectedListing?: AirbnbListing | null
 ): void {
+  // Try to get selected listing from popup first, then from injected parameter
   const selectedListingId = getSelectedListingId();
+  let selectedListing: AirbnbListing | null = null;
   
-  if (!selectedListingId) {
-    // No selection, remove any selected listing bubble
-    container.selectAll('.selected-listing').remove();
-    return;
+  if (selectedListingId) {
+    // Find the selected listing from popup
+    selectedListing = listings.find(l => l.id === selectedListingId) || null;
+  } else if (injectedSelectedListing) {
+    // Use injected selected listing
+    selectedListing = injectedSelectedListing;
   }
   
-  // Find the selected listing
-  const selectedListing = listings.find(l => l.id === selectedListingId);
   if (!selectedListing) {
+    // No selection, remove any selected listing bubble
     container.selectAll('.selected-listing').remove();
     return;
   }
@@ -228,13 +242,15 @@ export function updateSelectedListing(
  * @param projection D3 geo projection
  * @param fisheyeFocus Focus point of the fisheye
  * @param zoomLevel Current zoom level
+ * @param onSelect Callback when a listing is selected or cleared
  */
 export function renderFisheyeListings(
   container: d3.Selection<SVGGElement, unknown, null, undefined>,
   listings: AirbnbListing[],
   projection: d3.GeoProjection,
   fisheyeFocus: [number, number],
-  zoomLevel: number
+  zoomLevel: number,
+  onSelect?: (listing: AirbnbListing | null) => void
 ): void {
   // Get currently selected listing ID
   const selectedListingId = getSelectedListingId();
@@ -321,9 +337,10 @@ export function renderFisheyeListings(
         d.listing,
         [rect.left + rect.width / 2, rect.top + rect.height / 2],
         () => {
-          // Popup closed - remove selected listing bubble
-          fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing').remove();
-        }
+          // Popup closed - keep the selected listing bubble visible
+          // User can clear selection using the clear button in ListingDetails component
+        },
+        onSelect
       );
       
       // Remove old selected listing and create new one
