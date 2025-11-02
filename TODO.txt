@@ -31,3 +31,4 @@ MAP
     Add to favorites (stars)
     "Show on map" button
     Bouton activation/désactivation fisheye
+    enrich with more data

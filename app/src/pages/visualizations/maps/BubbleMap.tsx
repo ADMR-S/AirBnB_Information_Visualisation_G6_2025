@@ -146,7 +146,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           console.log(`[BubbleMap] Rendering CITY bubbles (zoom < ${MAP_CONFIG.zoom.cityThreshold})`);
         }
         // Show cities as bubbles
-        makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
+        makeBubbles(g, projection, cityBubbles, maxCityCount, MAP_CONFIG.bubbles.citySizeRange);
         // Show selected listing AFTER city bubbles so it appears on top
         updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
         // Show host properties as green triangles (for host persona)
@@ -196,7 +196,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           
           if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
             // City level: show city bubble size legend
-            renderSizeLegend(svg, width, height, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
+            renderSizeLegend(svg, width, height, maxCityCount, MAP_CONFIG.bubbles.citySizeRange);
           } else {
             // Neighborhood level: show neighborhood size legend
             const maxNeighborhoodCount = d3.max(neighborhoodFields, d => d.count) || 1;
@@ -339,11 +339,6 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
       console.log(`[BubbleMap] Data update - Processing ${filteredData.length} listings`);
       console.log(`[BubbleMap] Aggregated to ${cityBubbles.length} cities, ${neighborhoodFields.length} neighborhoods, ${cityBoundaries.length} city boundaries`);
     }
-    
-    // Update max for consistent scaling
-    if (maxCityCount > maxCityCountRef.current) {
-      maxCityCountRef.current = maxCityCount;
-    }
 
     // Function to render based on zoom level
     function renderVisualization(zoomLevel: number) {
@@ -360,7 +355,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         if (MAP_CONFIG.DEBUG_LOG) {
           console.log(`[BubbleMap] Rendering CITY bubbles (zoom < ${MAP_CONFIG.zoom.cityThreshold})`);
         }
-        makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
+        makeBubbles(g, projection, cityBubbles, maxCityCount, MAP_CONFIG.bubbles.citySizeRange);
         // Show selected listing AFTER city bubbles so it appears on top
         updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
         // Show host properties as green triangles (for host persona)
@@ -410,7 +405,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
     
     if (currentZoom < MAP_CONFIG.zoom.cityThreshold) {
       // City level: show city bubble size legend
-      renderSizeLegend(svg, width, height, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
+      renderSizeLegend(svg, width, height, maxCityCount, MAP_CONFIG.bubbles.citySizeRange);
     } else {
       // Neighborhood level: show neighborhood size legend
       const maxNeighborhoodCount = d3.max(neighborhoodFields, d => d.count) || 1;
