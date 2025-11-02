@@ -6,7 +6,7 @@ import { useSelectedListing } from '../../../contexts/SelectedListingContext';
 import { useHostSelection } from '../../../contexts/HostSelectionContext';
 import { useFilterStore } from '../../../stores/useFilterStore';
 import { createProjection, createNullProjectionPath } from './mapUtils';
-import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap, renderSizeLegend, renderColorLegend } from './mapRenderers';
+import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap, renderSizeLegend, renderColorLegend, renderReviewsLegend } from './mapRenderers';
 import { renderFisheyeListings, applyFisheyeToBasemap, restoreBasemapPaths, getFisheyeRadius, updateSelectedListing, renderHostProperties } from './fisheyeUtils';
 import { MAP_CONFIG } from './mapConfig';
 import ListingDetails from '../../../components/ListingDetails';
@@ -192,16 +192,21 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           const prices = filteredData.map(d => d.price);
           const minPrice = d3.min(prices) || 0;
           const maxPrice = d3.max(prices) || 1;
+          const reviews = filteredData.map(d => d.number_of_reviews);
+          const minReviews = d3.min(reviews) || 0;
+          const maxReviews = d3.max(reviews) || 1;
           
           if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
-            // City level: show city bubble size legend
+            // City level: show city bubble size legend and price legend
             renderSizeLegend(svg, width, height, maxCityCount, MAP_CONFIG.bubbles.citySizeRange);
+            renderColorLegend(svg, width, height, minPrice, maxPrice);
+            svg.selectAll('.reviews-legend').remove();
           } else {
-            // Neighborhood level: show neighborhood size legend
-            const maxNeighborhoodCount = d3.max(neighborhoodFields, d => d.count) || 1;
-            renderSizeLegend(svg, width, height, maxNeighborhoodCount, MAP_CONFIG.bubbles.neighborhoodSizeRange);
+            // Neighborhood level: show only reviews legend (size and price legends hidden)
+            renderReviewsLegend(svg, width, height, minReviews, maxReviews);
+            svg.selectAll('.color-legend').remove();
+            svg.selectAll('.size-legend').remove();
           }
-          renderColorLegend(svg, width, height, minPrice, maxPrice);
           
           // Clean up fisheye elements when zooming out to city level
           if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
@@ -394,25 +399,28 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
     const height = MAP_CONFIG.defaultHeight;
     const svg = d3.select(svgRef.current);
 
-    // Calculate min and max prices from filtered data
+    // Calculate min and max prices and reviews from filtered data
     const prices = filteredData.map(d => d.price);
     const minPrice = d3.min(prices) || 0;
     const maxPrice = d3.max(prices) || 1;
+    const reviews = filteredData.map(d => d.number_of_reviews);
+    const minReviews = d3.min(reviews) || 0;
+    const maxReviews = d3.max(reviews) || 1;
 
     // Render legends based on current zoom level
     const currentZoom = currentZoomRef.current;
     
     if (currentZoom < MAP_CONFIG.zoom.cityThreshold) {
-      // City level: show city bubble size legend
+      // City level: show city bubble size legend and price legend
       renderSizeLegend(svg, width, height, maxCityCount, MAP_CONFIG.bubbles.citySizeRange);
+      renderColorLegend(svg, width, height, minPrice, maxPrice);
+      svg.selectAll('.reviews-legend').remove();
     } else {
-      // Neighborhood level: show neighborhood size legend
-      const maxNeighborhoodCount = d3.max(neighborhoodFields, d => d.count) || 1;
-      renderSizeLegend(svg, width, height, maxNeighborhoodCount, MAP_CONFIG.bubbles.neighborhoodSizeRange);
+      // Neighborhood level: show only reviews legend (size and price legends hidden)
+      renderReviewsLegend(svg, width, height, minReviews, maxReviews);
+      svg.selectAll('.color-legend').remove();
+      svg.selectAll('.size-legend').remove();
     }
-    
-    // Always show color legend
-    renderColorLegend(svg, width, height, minPrice, maxPrice);
   }, [filteredData, neighborhoodFields, maxCityCount]);
 
   function handleZoomIn() {
