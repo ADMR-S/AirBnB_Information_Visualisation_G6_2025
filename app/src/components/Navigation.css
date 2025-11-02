@@ -24,11 +24,11 @@
 }
 
 .navigation.traveler a.active {
-  background: #667eea;
+  background: var(--color-purple-light);
 }
 
 .navigation.host a.active {
-  background: #764ba2;
+  background: var(--color-purple);
 }
 
 .navigation .label {

@@ -14,11 +14,11 @@
 }
 
 .header.host {
-  background: #764ba2;
+  background: var(--color-purple);
 }
 
 .header.traveler {
-  background: #667eea;
+  background: var(--color-purple-light);
 }
 
 .header-content {

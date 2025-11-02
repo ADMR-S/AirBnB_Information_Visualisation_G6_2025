@@ -13,7 +13,7 @@
 .breadcrumb-item {
   background: none;
   border: none;
-  color: #667eea;
+  color: var(--color-purple-light);
   font-size: 0.875rem;
   font-weight: 400;
   cursor: pointer;

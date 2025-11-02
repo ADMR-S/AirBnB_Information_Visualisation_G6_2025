@@ -87,7 +87,7 @@
 
 .filter-group select:hover,
 .dropdown-button:hover {
-  border-color: #667eea;
+  border-color: var(--color-purple-light);
 }
 
 .filter-group select:disabled,
@@ -100,7 +100,7 @@
 
 .filter-group input[type="number"]:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-purple-light);
 }
 
 .filter-stats {
