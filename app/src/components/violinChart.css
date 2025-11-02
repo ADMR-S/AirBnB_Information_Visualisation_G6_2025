@@ -1,0 +1,10 @@
+svg {
+  width: 100%;
+  max-width: 900px;
+  height: auto;
+}
+
+text {
+  font-family: 'Inter', sans-serif;
+  fill: #333;
+}
