@@ -23,12 +23,10 @@ MAP
     pop up ne se ferme pas en changeant d'écran
 
 
-    légende
     afficher propriétés host dans listing
     listings superposés (afficher on long hover)
-    Couleurs champs neighborhood, bulles et city
     formes
     Add to favorites (stars)
     "Show on map" button
     Bouton activation/désactivation fisheye
-    enrich with more data
+    enrich with more data (google maps)
