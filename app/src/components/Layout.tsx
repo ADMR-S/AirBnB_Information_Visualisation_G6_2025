@@ -3,6 +3,7 @@ import FilterBar from './FilterBar';
 import Navigation from './Navigation';
 import FilterBreadcrumbs from './FilterBreadcrumbs';
 import './Layout.css';
+import { useHostSelection } from '../contexts/HostSelectionContext';
 
 interface LayoutProps {
   persona: 'traveler' | 'host';
@@ -10,6 +11,7 @@ interface LayoutProps {
 
 export default function Layout({ persona }: LayoutProps) {
   const navigate = useNavigate();
+  const host = useHostSelection();
 
   const handleGoHome = () => {
     navigate('/');
@@ -22,9 +24,17 @@ export default function Layout({ persona }: LayoutProps) {
           <h1 onClick={handleGoHome} style={{ cursor: 'pointer' }}>
             AirBnB Market Insights
           </h1>
+          {persona === 'traveler' && (
           <span className="persona-badge">
-            {persona === 'traveler' ? 'Traveler' : 'Host'} Mode
+            {'Traveler'} Page
           </span>
+          )}
+          {persona === 'host' && (
+            <span className="persona-badge">
+              Host {`${host?.selectedHost?.hostName}`} {`Id: ${host?.selectedHost?.hostId}`}
+            </span>
+          )}
+            
         </div>
       </header>
 
