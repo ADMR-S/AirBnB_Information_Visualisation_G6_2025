@@ -25,7 +25,6 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
   const { allData } = useFilterStore();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const maxCityCountRef = useRef<number>(0);
   const currentZoomRef = useRef<number>(1);
   const currentTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
