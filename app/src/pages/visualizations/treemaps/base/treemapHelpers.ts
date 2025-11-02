@@ -1,49 +1,22 @@
 import * as d3 from 'd3';
-import type { AirbnbListing } from '../../../types/airbnb.types';
-import { showTooltip, hideTooltip } from '../../../utils/tooltip';
-import { getApplicableBadges, type BadgeConfig } from '../../../utils/visualBadges';
+import type { AirbnbListing } from '../../../../types/airbnb.types';
+import { showTooltip, hideTooltip } from '../../../../utils/tooltip';
+import { getApplicableBadgesByConcentration, type BadgeConfig } from './visualBadges';
 import { TREEMAP_CONFIG } from './treemapConfig';
 
-/**
- * Represents a node in the treemap hierarchy
- * Can be a parent (with children) or a leaf node
- */
 export interface TreemapNode {
-  /** Display name for this node */
   name: string;
-  
-  /** Hierarchy level: 'state', 'city', 'room_type', 'host_category', etc. */
   level?: string;
-  
-  /** Numeric value used for sizing */
   value?: number;
-  
-  /** Average price across listings in this node */
   avgPrice?: number;
-  
-  /** Average availability (days/year) across listings */
   avgAvailability?: number;
-  
-  /** Total number of listings in this node */
   totalListings?: number;
-  
-  /** Average number of reviews across listings */
   avgReviews?: number;
-  
-  /** Parent state name (used for navigation breadcrumbs) */
   parentState?: string;
-  
-  /** Child nodes (undefined for leaf nodes) */
+  listings?: AirbnbListing[];
   children?: TreemapNode[];
 }
 
-/**
- * Aggregates raw listing data into summary statistics
- * Used to compute metrics for each treemap node
- * 
- * @param listings - Array of Airbnb listings to aggregate
- * @returns Object with computed metrics (value, prices, availability, reviews)
- */
 export function aggregateListings(listings: AirbnbListing[]) {
   return {
     value: listings.length,
@@ -51,16 +24,10 @@ export function aggregateListings(listings: AirbnbListing[]) {
     avgPrice: d3.mean(listings, d => d.price) || 0,
     avgAvailability: d3.mean(listings, d => d.availability_365) || 0,
     avgReviews: d3.mean(listings, d => d.number_of_reviews) || 0,
+    listings,
   };
 }
 
-/**
- * Categorizes hosts by their total listing count
- * Used in Host view to show different host size segments
- * 
- * @param count - Number of listings the host has
- * @returns Human-readable category label
- */
 export function categorizeHostSize(count: number): string {
   if (count === 1) return 'Individual Hosts (1 listing)';
   if (count <= 5) return 'Small Hosts (2-5 listings)';
@@ -68,13 +35,6 @@ export function categorizeHostSize(count: number): string {
   return 'Large Hosts (21+ listings)';
 }
 
-/**
- * Categorizes listings by their annual availability
- * Used in Traveler view to show availability segments
- * 
- * @param avail - Number of available days per year (0-365)
- * @returns Human-readable availability category
- */
 export function categorizeAvailability(avail: number): string {
   if (avail >= 270) return 'Year-round (270+ days)';
   if (avail >= 180) return 'Long-term (180-269 days)';
@@ -82,17 +42,6 @@ export function categorizeAvailability(avail: number): string {
   return 'Short-term (<90 days)';
 }
 
-/**
- * Helper to add text labels to SVG nodes
- * Handles positioning, styling, and conditional rendering based on size
- * 
- * @param nodes - D3 selection of nodes to add text to
- * @param x - X position offset from node origin
- * @param y - Y position offset from node origin
- * @param getText - Function to extract text content from data
- * @param fontSize - CSS font-size value (e.g., '12px')
- * @param bold - Whether to bold the text
- */
 const addText = (
   nodes: any,
   x: number,
@@ -113,25 +62,6 @@ const addText = (
 
 /**
  * Renders a treemap visualization as SVG
- * 
- * Creates a hierarchical treemap with interactive rectangles representing data nodes.
- * Each rectangle is sized by value (log scale), colored by a metric, and shows
- * labels with optional badge indicators.
- * 
- * Features:
- * - Click to drill down (except on final level)
- * - Hover for tooltips
- * - Automatic label hiding for small rectangles
- * - Inline badge icons for highlighted nodes
- * 
- * @param svg - D3 selection of the SVG element to render into
- * @param root - Computed D3 hierarchy with layout coordinates
- * @param options - Rendering configuration
- * @param options.colorFn - Function to determine fill color for each node
- * @param options.tooltipFn - Function to generate HTML tooltip content
- * @param options.badges - Optional array of badge configs to display on nodes
- * @param options.onDrillDown - Callback when user clicks a node to drill down
- * @param options.finalLevel - Level name where drilling stops (leaf level)
  */
 export function renderTreemapSVG(
   svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
@@ -141,6 +71,7 @@ export function renderTreemapSVG(
     tooltipFn: (d: any) => string;
     badges?: BadgeConfig[];
     badgeThresholds?: Map<BadgeConfig, number>;
+    minConcentration?: number; // Minimum % of exceptional listings to show badge
     onDrillDown: (data: any) => void;
     finalLevel: string;
   }
@@ -184,10 +115,10 @@ export function renderTreemapSVG(
   // Add node name label (hidden if rectangle too narrow)
   addText(
     nodes,
-    4,
-    16,
+    8,
+    25,
     (d: any) => (d.x1 - d.x0 < TREEMAP_CONFIG.minWidthForLabel ? '' : d.data.name),
-    '12px',
+    '20px',
     true
   );
 
@@ -198,10 +129,19 @@ export function renderTreemapSVG(
     // Skip text if rectangle too narrow
     if (width < TREEMAP_CONFIG.minWidthForListingCount) return;
 
-    // Get applicable badges and their icons
-    const applicableBadges = options.badges
-      ? getApplicableBadges(d.data, options.badges, options.badgeThresholds)
-      : [];
+    // Get applicable badges based on listing concentration
+    let applicableBadges: BadgeConfig[] = [];
+    if (options.badges && options.badgeThresholds) {
+      const nodeListings = d.data.listings;
+      if (nodeListings && Array.isArray(nodeListings) && nodeListings.length > 0) {
+        applicableBadges = getApplicableBadgesByConcentration(
+          nodeListings,
+          options.badges,
+          options.badgeThresholds,
+          options.minConcentration ?? 15
+        );
+      }
+    }
     const badgeIcons = applicableBadges.map(b => b.icon).join(' ');
     
     // Build text: "X listings 🔥 ⭐"
@@ -209,10 +149,10 @@ export function renderTreemapSVG(
 
     // Render the text element
     d3.select(this).append('text')
-      .attr('x', 4)
-      .attr('y', 32)
+      .attr('x', 8)
+      .attr('y', 55)
       .text(text)
-      .attr('font-size', '10px')
+      .attr('font-size', '18px')
       .attr('fill', 'var(--color-text-white)')
       .style('pointer-events', 'none');
   });

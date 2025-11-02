@@ -83,3 +83,58 @@ body {
   transform: translateY(-4px);
   box-shadow: 0 8px 24px var(--color-shadow-medium);
 }
+
+
+/* Layout Utilities */
+.hstack {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.vstack {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Card Component */
+.card {
+  background: var(--color-bg-white);
+  border: 1px solid var(--color-border-light);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.card-header {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--color-text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--color-gray-300);
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Divider */
+.divider {
+  height: 1px;
+  background-color: var(--color-border-light);
+  border: none;
+  margin: 0.5rem 0;
+}
+
+.divider-vertical {
+  width: 1px;
+  height: 100%;
+  background-color: var(--color-border-light);
+  border: none;
+  margin: 0 0.5rem;
+}
