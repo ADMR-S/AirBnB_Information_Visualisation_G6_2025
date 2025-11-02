@@ -78,8 +78,22 @@ export function makeNeighborhoodFields(
     console.log(`[makeNeighborhoodFields] Rendering ${neighborhoodFields.length} neighborhoods`);
   }
   
-  const maxAvgPrice = d3.max(neighborhoodFields, d => d.avgPrice) || 1;
-  const colorScale = createColorScale(maxAvgPrice);
+  // Group neighborhoods by city to create per-city color scales
+  const neighborhoodsByCity = d3.group(neighborhoodFields, d => d.city);
+  
+  // Create color scale per city (min price -> green, max price -> red)
+  const cityColorScales = new Map<string, ReturnType<typeof d3.scaleSequential>>();
+  neighborhoodsByCity.forEach((neighborhoods, city) => {
+    const prices = neighborhoods.map(n => n.avgPrice);
+    const minPrice = d3.min(prices) || 0;
+    const maxPrice = d3.max(prices) || 1;
+    
+    // Use RdYlGn interpolator with reversed domain (high price = red = 0, low price = green = 1)
+    const colorScale = d3.scaleSequential(d3.interpolateRdYlGn)
+      .domain([maxPrice, minPrice]);
+    
+    cityColorScales.set(city, colorScale);
+  });
 
   const fieldsGroup = container.append("g").attr("class", "neighborhood-fields");
 
@@ -135,12 +149,16 @@ export function makeNeighborhoodFields(
     // Create polygon points string from all hull points
     const points = projectedPoints.map(p => `${p[0]},${p[1]}`).join(' ');
 
+    // Get the color scale for this city
+    const colorScale = cityColorScales.get(field.city);
+    const fillColor: string = colorScale ? colorScale(field.avgPrice) as string : '#cccccc';
+    
     // Draw the hull polygon
     fieldsGroup.append("polygon")
       .attr("points", points)
-      .attr("fill", colorScale(field.avgPrice))
+      .attr("fill", fillColor)
       .attr("fill-opacity", MAP_CONFIG.neighborhoodFields.fillOpacity)
-      .attr("stroke", colorScale(field.avgPrice))
+      .attr("stroke", fillColor)
       .attr("stroke-width", MAP_CONFIG.neighborhoodFields.strokeWidth)
       .attr("stroke-opacity", MAP_CONFIG.neighborhoodFields.strokeOpacity)
       .style("cursor", "pointer")

@@ -24,6 +24,17 @@ export function createColorScale(maxValue: number): d3.ScaleSequential<string> {
 }
 
 /**
+ * Creates a color scale for neighborhoods from green (cheap) to red (expensive)
+ * @param minValue Minimum price value (will be green)
+ * @param maxValue Maximum price value (will be red)
+ * @returns D3 Sequential Scale
+ */
+export function createNeighborhoodPriceColorScale(minValue: number, maxValue: number) {
+  return d3.scaleSequential(d3.interpolateRdYlGn)
+    .domain([maxValue, minValue]); // Reversed domain: high values -> red (0.0), low values -> green (1.0)
+}
+
+/**
  * Creates a radius scale for bubble sizes
  * @param maxValue Maximum value for the domain
  * @param sizeRange Tuple of [min, max] radius sizes

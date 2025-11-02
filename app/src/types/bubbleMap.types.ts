@@ -8,6 +8,7 @@ export interface BubbleData {
 
 export interface NeighborhoodField {
   label: string;
+  city: string;
   count: number;
   avgPrice: number;
   hullPoints: [number, number][];

@@ -28,8 +28,7 @@ MAP
     légende
     afficher propriétés host
     listings superposés (afficher on long hover)
-    - afficher détail listing sous la carte
-    Interactions vers autres vues
     Couleurs champs neighborhood, bulles et city
     formes
     Add to favorites (stars)
+    "Show on map" button

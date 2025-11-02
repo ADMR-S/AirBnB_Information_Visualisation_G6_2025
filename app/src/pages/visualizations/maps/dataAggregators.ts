@@ -109,6 +109,7 @@ export function aggregateAllData(data: AirbnbListing[]) {
       
       return {
         label: `${data.neighbourhood} (${data.city})`,
+        city: data.city,
         count: data.count,
         avgPrice: data.priceSum / data.count,
         hullPoints: hullPoints
