@@ -430,11 +430,17 @@ export function renderFisheyeListings(
   }
   
   // Create color scale for listing reviews (medium blue to dark blue)
+  // Use a square root scale to make differences more noticeable at lower values
   const reviewCounts = listings.map(d => d.number_of_reviews);
   const minReviews = d3.min(reviewCounts) || 0;
   const maxReviews = d3.max(reviewCounts) || 1;
-  // Use a custom interpolator that starts at a darker blue (0.3) instead of very light (0)
-  const colorScale = d3.scaleSequential((t: number) => d3.interpolateBlues(0.3 + t * 0.7)).domain([minReviews, maxReviews]);
+  // Use scaleSqrt instead of scaleLinear for better visual distinction at lower values
+  const colorScale = d3.scaleSqrt()
+    .domain([minReviews, maxReviews])
+    .range([0.3, 1.0]) // Map to color interpolation range
+    .clamp(true);
+  
+  const getColor = (reviews: number) => d3.interpolateBlues(colorScale(reviews));
   
   // Render non-selected listing bubbles
   fisheyeGroup
@@ -452,7 +458,7 @@ export function renderFisheyeListings(
       return distorted.y;
     })
     .attr('r', listingBubbleRadius)
-    .attr('fill', (d: ProjectedListing) => colorScale(d.listing.number_of_reviews) as string)
+    .attr('fill', (d: ProjectedListing) => getColor(d.listing.number_of_reviews))
     .attr('fill-opacity', 0.7)
     .attr('stroke', '#fff')
     .attr('stroke-width', 0.02)
@@ -462,7 +468,7 @@ export function renderFisheyeListings(
       
       // Reset hover state on the clicked bubble
       d3.select(this)
-        .attr('fill', colorScale(d.listing.number_of_reviews) as string)
+        .attr('fill', getColor(d.listing.number_of_reviews))
         .attr('r', listingBubbleRadius);
       
       const rect = (event.target as SVGCircleElement).getBoundingClientRect();
@@ -494,7 +500,7 @@ export function renderFisheyeListings(
     })
     .on('mouseout', function(this: SVGCircleElement, _event: unknown, d: ProjectedListing) {
       d3.select(this)
-        .attr('fill', colorScale(d.listing.number_of_reviews) as string)
+        .attr('fill', getColor(d.listing.number_of_reviews))
         .attr('r', listingBubbleRadius);
     });
   
