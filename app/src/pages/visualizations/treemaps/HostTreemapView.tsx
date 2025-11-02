@@ -6,6 +6,7 @@ import { EXAMPLE_BADGES, type BadgeConfig } from '../../../utils/visualBadges';
 import { calculateNaturalBreaks, createLabels } from '../../../utils/naturalBreaks';
 import { sampleColors, createColorBreaks, getColorForValue, COLOR_PALETTES } from '../../../utils/colorScale';
 import { aggregateListings, categorizeHostSize, renderTreemapSVG, type TreemapNode } from './treemapHelpers';
+import { TREEMAP_CONFIG, createTreemapLayout, prepareHierarchy } from './treemapConfig';
 import { useTreemapNavigation } from './useTreemapNavigation';
 import '../VisualizationPage.css';
 import './TreemapView.css';
@@ -33,56 +34,52 @@ export default function HostTreemapView() {
     renderTreemap();
   }, [filteredData, isLoading, states, cities]);
 
+  // Build simplified hierarchy - one level at a time (no nested parent/child groups)
   const buildHierarchy = (): TreemapNode => {
+    // Level 0: Show states
     if (currentLevel === 0) {
-      const grouped = d3.group(filteredData, d => d.state, d => d.city);
+      const grouped = d3.group(filteredData, d => d.state);
       return {
         name: 'root',
-        children: Array.from(grouped, ([state, cities]) => ({
+        children: Array.from(grouped, ([state, listings]) => ({
           name: state,
           level: 'state',
-          children: Array.from(cities, ([city, listings]) => ({
+          ...aggregateListings(listings),
+        })),
+      };
+    }
+    
+    // Level 1: Show cities (within selected state)
+    if (currentLevel === 1) {
+      const grouped = d3.group(filteredData, d => d.city);
+      return {
+        name: 'root',
+        children: Array.from(grouped, ([city, listings]) => {
+          const parentState = listings[0]?.state;
+          return {
             name: city,
             level: 'city',
-            parentState: state,
+            parentState,
             ...aggregateListings(listings),
-          })),
-        })),
+          };
+        }),
       };
     }
     
-    if (currentLevel === 1) {
-      const grouped = d3.group(filteredData, d => d.city, d => categorizeHostSize(d.calculated_host_listings_count));
-      return {
-        name: 'root',
-        children: Array.from(grouped, ([city, categories]) => ({
-          name: city,
-          level: 'city',
-          children: Array.from(categories, ([category, listings]) => ({
-            name: category,
-            level: 'host_category',
-            ...aggregateListings(listings),
-          })),
-        })),
-      };
-    }
-    
+    // Level 2: Show host size categories (within selected city)
     if (currentLevel === 2) {
-      const grouped = d3.group(filteredData, d => categorizeHostSize(d.calculated_host_listings_count), d => d.room_type);
+      const grouped = d3.group(filteredData, d => categorizeHostSize(d.calculated_host_listings_count));
       return {
         name: 'root',
-        children: Array.from(grouped, ([category, roomTypes]) => ({
+        children: Array.from(grouped, ([category, listings]) => ({
           name: category,
           level: 'host_category',
-          children: Array.from(roomTypes, ([roomType, listings]) => ({
-            name: roomType,
-            level: 'room_type',
-            ...aggregateListings(listings),
-          })),
+          ...aggregateListings(listings),
         })),
       };
     }
     
+    // Level 3: Show room types (final level)
     const grouped = d3.group(filteredData, d => d.room_type);
     return {
       name: 'root',
@@ -101,21 +98,18 @@ export default function HostTreemapView() {
     const svg = d3.select(svgElement);
     svg.selectAll('*').remove();
 
-    const width = svgElement.clientWidth || 600;
-    const height = svgElement.clientHeight || 500;
-    const levelName = ['state', 'city', 'host_category', 'room_type'][currentLevel];
+    // Get dimensions
+    const width = svgElement.clientWidth //|| TREEMAP_CONFIG.defaultWidth;
+    const height = svgElement.clientHeight //|| TREEMAP_CONFIG.defaultHeight;
 
-    const root = d3.hierarchy(buildHierarchy())
-      .sum((d: any) => (d.value > 0 ? Math.log1p(d.value) : 0))
-      .sort((a, b) => (b.value || 0) - (a.value || 0));
+    // Prepare data hierarchy
+    const root = prepareHierarchy(buildHierarchy());
 
-    d3.treemap<any>()
-      .size([width, height])
-      .paddingTop(levelName === 'room_type' ? 20 : 25)
-      .paddingInner(2)
-      (root as any);
+    // Apply treemap layout
+    createTreemapLayout(width, height)(root as any);
 
-    renderTreemapSVG(svg, root as any, levelName, {
+    // Render the treemap
+    renderTreemapSVG(svg, root as any, {
       colorFn: (d) => getColorForValue(d.data.avgPrice, priceBreaks, '#999'),
       tooltipFn: (d) => `
         <strong>${d.data.name}</strong><br/>
@@ -178,7 +172,7 @@ export default function HostTreemapView() {
           </div>
 
           <div className="legend-note">
-            Size = Listings (log scale)<br/>Colors = Natural price breaks
+            Size = Listings (log scale)
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { useFilterStore } from '../../../stores/useFilterStore';
 import { useFilteredData } from '../../../hooks/useFilteredData';
 import { EXAMPLE_BADGES, type BadgeConfig } from '../../../utils/visualBadges';
 import { aggregateListings, categorizeAvailability, renderTreemapSVG, type TreemapNode } from './treemapHelpers';
+import { TREEMAP_CONFIG, createTreemapLayout, prepareHierarchy } from './treemapConfig';
 import { useTreemapNavigation } from './useTreemapNavigation';
 import '../VisualizationPage.css';
 import './TreemapView.css';
@@ -24,56 +25,52 @@ export default function TravelerTreemapView() {
     renderTreemap();
   }, [filteredData, isLoading, states, cities]);
 
+  // Build simplified hierarchy - one level at a time (no nested parent/child groups)
   const buildHierarchy = (): TreemapNode => {
+    // Level 0: Show states
     if (currentLevel === 0) {
-      const grouped = d3.group(filteredData, d => d.state, d => d.city);
+      const grouped = d3.group(filteredData, d => d.state);
       return {
         name: 'root',
-        children: Array.from(grouped, ([state, cities]) => ({
+        children: Array.from(grouped, ([state, listings]) => ({
           name: state,
           level: 'state',
-          children: Array.from(cities, ([city, listings]) => ({
+          ...aggregateListings(listings),
+        })),
+      };
+    }
+    
+    // Level 1: Show cities (within selected state)
+    if (currentLevel === 1) {
+      const grouped = d3.group(filteredData, d => d.city);
+      return {
+        name: 'root',
+        children: Array.from(grouped, ([city, listings]) => {
+          const parentState = listings[0]?.state;
+          return {
             name: city,
             level: 'city',
-            parentState: state,
+            parentState,
             ...aggregateListings(listings),
-          })),
-        })),
+          };
+        }),
       };
     }
     
-    if (currentLevel === 1) {
-      const grouped = d3.group(filteredData, d => d.city, d => d.room_type);
-      return {
-        name: 'root',
-        children: Array.from(grouped, ([city, roomTypes]) => ({
-          name: city,
-          level: 'city',
-          children: Array.from(roomTypes, ([roomType, listings]) => ({
-            name: roomType,
-            level: 'room_type',
-            ...aggregateListings(listings),
-          })),
-        })),
-      };
-    }
-    
+    // Level 2: Show room types (within selected city)
     if (currentLevel === 2) {
-      const grouped = d3.group(filteredData, d => d.room_type, d => categorizeAvailability(d.availability_365));
+      const grouped = d3.group(filteredData, d => d.room_type);
       return {
         name: 'root',
-        children: Array.from(grouped, ([roomType, categories]) => ({
+        children: Array.from(grouped, ([roomType, listings]) => ({
           name: roomType,
           level: 'room_type',
-          children: Array.from(categories, ([category, listings]) => ({
-            name: category,
-            level: 'availability_category',
-            ...aggregateListings(listings),
-          })),
+          ...aggregateListings(listings),
         })),
       };
     }
     
+    // Level 3: Show availability categories (final level)
     const grouped = d3.group(filteredData, d => categorizeAvailability(d.availability_365));
     return {
       name: 'root',
@@ -92,25 +89,23 @@ export default function TravelerTreemapView() {
     const svg = d3.select(svgElement);
     svg.selectAll('*').remove();
 
-    const width = svgElement.clientWidth || 600;
-    const height = svgElement.clientHeight || 500;
-    const levelName = ['state', 'city', 'room_type', 'availability_category'][currentLevel];
+    // Get dimensions
+    const width = svgElement.clientWidth || TREEMAP_CONFIG.defaultWidth;
+    const height = svgElement.clientHeight || TREEMAP_CONFIG.defaultHeight;
 
-    const root = d3.hierarchy(buildHierarchy())
-      .sum((d: any) => (d.value > 0 ? Math.log1p(d.value) : 0))
-      .sort((a, b) => (b.value || 0) - (a.value || 0));
+    // Prepare data hierarchy
+    const root = prepareHierarchy(buildHierarchy());
 
-    d3.treemap<any>()
-      .size([width, height])
-      .paddingTop(levelName === 'availability_category' ? 20 : 25)
-      .paddingInner(2)
-      (root as any);
+    // Apply treemap layout
+    createTreemapLayout(width, height)(root as any);
 
+    // Color scale for availability (red = low, green = high)
     const colorScale = d3.scaleSequential()
       .domain([0, 365])
       .interpolator(d3.interpolateRgb('#ef4444', '#4ade80'));
 
-    renderTreemapSVG(svg, root as any, levelName, {
+    // Render the treemap
+    renderTreemapSVG(svg, root as any, {
       colorFn: (d) => colorScale(d.data.avgAvailability),
       tooltipFn: (d) => `
         <strong>${d.data.name}</strong><br/>
