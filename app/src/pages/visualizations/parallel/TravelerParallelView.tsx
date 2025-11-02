@@ -23,7 +23,7 @@ export default function TravelerParallelView() {
   const filteredData = useFilteredData();
 
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null); 
   const selectionCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [renderAll, setRenderAll] = useState(false);
   const [useAggregation, setUseAggregation] = useState(true);
@@ -37,7 +37,7 @@ export default function TravelerParallelView() {
       setSortColumn(column);
       setSortDirection('asc');
     } else if (sortDirection === 'asc') {
-      setSortDirection('desc');
+      setSortDirection('desc'); 
     } else if (sortDirection === 'desc') {
       setSortColumn(null);
       setSortDirection(null);
@@ -48,7 +48,7 @@ export default function TravelerParallelView() {
     () => Array.from(new Set(filteredData.map(d => d.room_type))).sort(),
     [filteredData]
   );
-
+ 
   const sortedTableData = useMemo(() => {
     let data = [...filteredData];
     
@@ -127,7 +127,7 @@ export default function TravelerParallelView() {
           scales[dim.key] = d3.scaleLinear().domain(extent).range([height, 0]).nice();
         }
       });
-      return scales;
+      return scales; 
     };
 
     const yScales = computeYScales(filteredData);
@@ -144,7 +144,7 @@ export default function TravelerParallelView() {
       const scale = yScales[d.key];
       if (d.key === 'availability_365') {
         const ticks = computeTicks(0, 365, 5);
-        d3.select(this).call(d3.axisLeft(scale).tickValues(ticks) as any);
+        d3.select(this).call(d3.axisLeft(scale).tickValues(ticks) as any); 
       } else {
         d3.select(this).call(d3.axisLeft(scale).ticks(5) as any);
       }
@@ -154,7 +154,7 @@ export default function TravelerParallelView() {
       .append('text')
       .attr('y', -9)
       .attr('text-anchor', 'middle')
-      .text((d: { key: keyof AirbnbListing; label: string }) => d.label)
+      .text((d: { key: keyof AirbnbListing; label: string }) => d.label) 
       .style('font-size', '12px');
 
     const totalWidth = width + margin.left + margin.right;
@@ -285,7 +285,7 @@ export default function TravelerParallelView() {
         i = end;
         if (i < lines.length) rafId = requestAnimationFrame(step);
       };
-      step();
+      step(); 
     };
 
     renderBatched(linesToDraw);
@@ -300,7 +300,7 @@ export default function TravelerParallelView() {
     const selCanvas = selectionCanvasRef.current;
     if (!setup || !selCanvas) return;
 
-    const { margin, x, yScales } = setup;
+    const { margin, x, yScales } = setup; 
     
     const canvasEl = canvasRef.current;
     if (!canvasEl) return;
@@ -311,7 +311,7 @@ export default function TravelerParallelView() {
     clearBackingStore(selCtx, selCanvas);
     
     if (selectedListing) {
-      selCtx.save();
+      selCtx.save(); 
       selCtx.beginPath();
       DIMENSIONS.forEach((p, i) => {
         const xPos = margin.left + (x(String(p.key)) ?? 0);
@@ -378,7 +378,7 @@ export default function TravelerParallelView() {
       <p className="viz-description">Compare properties side-by-side ({filteredData.length.toLocaleString()} options)</p>
       <div style={{ position: 'relative', width: '100%' }}>
         <canvas ref={canvasRef} className="parallel-canvas" />
-        <canvas ref={selectionCanvasRef} className="parallel-canvas" style={{ pointerEvents: 'none' }} />
+        <canvas ref={selectionCanvasRef} className="parallel-canvas" style={{ pointerEvents: 'none' }} /> 
         <svg ref={svgRef} className="parallel-svg" aria-label="Parallel coordinates chart" />
       </div>
 
@@ -387,7 +387,7 @@ export default function TravelerParallelView() {
           onClick={() => setRenderAll(r => !r)}
           style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.08)', background: renderAll ? '#f0f0f0' : '#fff', cursor: 'pointer' }}
           title="Afficher toutes les lignes (peut être lent)"
-        >
+        > 
           {renderAll ? 'Afficher échantillon' : 'Afficher tout'}
         </button>
         <button
@@ -395,14 +395,14 @@ export default function TravelerParallelView() {
           style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.08)', background: useAggregation ? '#e0f2fe' : '#fff', cursor: 'pointer' }}
           title="Activer l'agrégation pour réduire le nombre de lignes affichées"
         >
-          {useAggregation ? '📊 Agrégation ON' : 'Agrégation OFF'}
+          {useAggregation ? '📊 Agrégation ON' : 'Agrégation OFF'} 
         </button>
         {renderAll && (
           <div style={{ fontSize: 12, color: '#a33' }}>
             Affichage complet: {filteredData.length.toLocaleString()} lignes — peut être lent
           </div>
         )}
-        {isAggregated && (
+        {isAggregated && ( 
           <div style={{ 
             fontSize: 12, 
             color: '#3b82f6',
@@ -448,7 +448,7 @@ export default function TravelerParallelView() {
                   <th style={{ padding: '6px 4px' }}>Moy</th>
                   <th style={{ padding: '6px 4px' }}>Med</th>
                   <th style={{ padding: '6px 4px' }}>Écart</th>
-                  <th style={{ padding: '6px 4px' }}>Min</th>
+                  <th style={{ padding: '6px 4px' }}>Min</th> 
                   <th style={{ padding: '6px 4px' }}>Max</th>
                 </tr>
               </thead>
@@ -459,18 +459,18 @@ export default function TravelerParallelView() {
                     <td style={{ padding: '6px 4px' }}>{Number.isNaN(m.stats.mean) ? '—' : m.stats.mean.toFixed(1)}</td>
                     <td style={{ padding: '6px 4px' }}>{Number.isNaN(m.stats.median) ? '—' : m.stats.median.toFixed(1)}</td>
                     <td style={{ padding: '6px 4px' }}>{Number.isNaN(m.stats.std) ? '—' : m.stats.std.toFixed(1)}</td>
-                    <td style={{ padding: '6px 4px' }}>{Number.isNaN(m.stats.min) ? '—' : m.stats.min.toLocaleString()}</td>
+                    <td style={{ padding: '6px 4px' }}>{Number.isNaN(m.stats.min) ? '—' : m.stats.min.toLocaleString()}</td> 
                     <td style={{ padding: '6px 4px' }}>{Number.isNaN(m.stats.max) ? '—' : m.stats.max.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
+ 
           <div style={{ minWidth: 220 }}>
             <div style={{ fontSize: 13, marginBottom: 8 }}>Répartition par room type</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {availRoomTypes.map((rt, i) => {
+              {availRoomTypes.map((rt, i) => { 
                 const c = filteredByRoom.filter(d => d.room_type === rt).length;
                 const totalShown = filteredByRoom.length;
                 return (
@@ -515,23 +515,23 @@ export default function TravelerParallelView() {
           <table className="data-table">
             <thead>
               <tr>
-                {(Object.keys(sortedTableData[0] || {}) as Array<keyof AirbnbListing>).map((column) => (
+                {(Object.keys(sortedTableData[0] || {}) as Array<keyof AirbnbListing>).map((column) => ( 
                   <th
                     key={column}
                     onClick={() => handleSort(column)}
                     style={{
                       backgroundColor: sortColumn === column ? '#f0f0f0' : 'transparent',
                       fontWeight: sortColumn === column ? 'bold' : 'normal',
-                    }}
+                    }} 
                   >
                     {column}
                     {sortColumn === column && (
-                      <span style={{ marginLeft: '0.5rem' }}>
+                      <span style={{ marginLeft: '0.5rem' }}> 
                         {sortDirection === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
                   </th>
-                ))}
+                ))} 
               </tr>
             </thead>
             <tbody>
@@ -556,7 +556,7 @@ export default function TravelerParallelView() {
               ))}
             </tbody>
           </table>
-        </div>
+        </div> 
         </div>
       </div>
     </div>
