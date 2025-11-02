@@ -109,7 +109,7 @@ export default function HostViolinView() {
       .attr('fill', selectedRoomType === group ? '#69b3a2' : '#88ccee')
       .attr('stroke', '#333')
       .attr('opacity', 0.8)
-      .attr('d', area)
+      .attr('d', area as any)
       .style('cursor', 'pointer')
       .on('click', () => {
         setSelectedRoomType(group);
@@ -131,7 +131,7 @@ export default function HostViolinView() {
       })
       .on('mousemove', (event: MouseEvent) => {
   const container = (svgRefOverview.current?.closest('.viz-container') as HTMLElement) || document.body;
-  positionTooltip(event, tooltip, container);
+  positionTooltip(event, tooltip as any, container);
 }).on('mouseout', () => tooltip.style('opacity', 0));
     const median = d3.median(values);
     g.append('line')
@@ -217,7 +217,7 @@ export default function HostViolinView() {
         .attr('fill', selectedState === state ? '#ffb347' : '#69b3a2')
         .attr('stroke', '#333')
         .attr('opacity', 0.8)
-        .attr('d', area)
+        .attr('d', area as any)
         .style('cursor', 'pointer')
         .on('click', () => setSelectedState(state))
         .on('mouseover', event => {
@@ -236,7 +236,7 @@ export default function HostViolinView() {
         })
         .on('mousemove', (event: MouseEvent) => {
   const container = (svgRefOverview.current?.closest('.viz-container') as HTMLElement) || document.body;
-  positionTooltip(event, tooltip, container);
+  positionTooltip(event, tooltip as any, container);
 }).on('mouseout', () => tooltip.style('opacity', 0));
       const median = d3.median(values);
       g.append('line')
@@ -326,7 +326,7 @@ export default function HostViolinView() {
         .attr('fill', '#ffcc66')
         .attr('stroke', '#333')
         .attr('opacity', 0.85)
-        .attr('d', area)
+        .attr('d', area as any)
         .on('mouseover', event => {
           const stats = computeStats(subset);
           if (!stats) return;
@@ -343,7 +343,7 @@ export default function HostViolinView() {
         })
         .on('mousemove', (event: MouseEvent) => {
   const container = (svgRefOverview.current?.closest('.viz-container') as HTMLElement) || document.body;
-  positionTooltip(event, tooltip, container);
+  positionTooltip(event, tooltip as any, container);
 }).on('mouseout', () => tooltip.style('opacity', 0));
       const median = d3.median(values);
       g.append('line')
