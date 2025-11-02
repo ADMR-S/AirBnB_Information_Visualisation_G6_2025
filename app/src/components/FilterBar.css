@@ -168,7 +168,7 @@
 }
 
 .filter-active {
-  outline: 2px solid var(--color-purple-light);
+  outline: 2px solid var(--color-purple-light-dark);
   outline-offset: -1px;
 }
 
