@@ -135,9 +135,8 @@ export default function TravelerTreemapView() {
 
   return (
     <div className="viz-container">
-      <div className="treemap-header">
-        <h2>Availability Explorer</h2>
-      </div>
+      <h2>Availability Explorer</h2>
+      <p className="viz-description">Geographic distribution of listings available (${filteredData.length.toLocaleString()} listings)</p>
 
       <div className="treemap-with-legend">
         <div className="treemap-container">

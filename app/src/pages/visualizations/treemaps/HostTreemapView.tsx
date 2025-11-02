@@ -139,9 +139,8 @@ export default function HostTreemapView() {
 
   return (
     <div className="viz-container">
-      <div className="treemap-header">
         <h2>Market Structure Analysis</h2>
-      </div>
+        <p className="viz-description">Geographic distribution of your properties (${filteredData.length.toLocaleString()} listings)</p>
 
       <div className="treemap-with-legend">
         <div className="treemap-container">
