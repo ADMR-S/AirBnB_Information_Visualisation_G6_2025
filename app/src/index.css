@@ -2,6 +2,16 @@
   /* Purple/Blue Gradient Colors */
   --color-purple-light: #667eea;
   --color-purple: #764ba2;
+
+/* Button Action Colors */ 
+--color-action-cancel: #6C757D;    /* Bootstrap secondary/gray */
+--color-action-confirm: #28A745;   /* Bootstrap success green */
+--color-action-cancel: #6B7280;    /* Tailwind gray-500 */
+--color-action-confirm: #22C55E;   /* Tailwind green-500 */
+--color-action-cancel: #757575;    /* Material grey-600 */
+--color-action-confirm: #4CAF50;   /* Material green-500 */
+
+
   
   /* Gray Scale */
   --color-gray-100: #f7f7f7;

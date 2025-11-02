@@ -1,8 +1,16 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import HostSelectionPopup from '../components/HostSelectionPopup';
 import './Landing.css';
 
 export default function Landing() {
   const navigate = useNavigate();
+  const [showHostPopup, setShowHostPopup] = useState(false);
+
+  const handleHostSelection = () => {
+    setShowHostPopup(false);
+    navigate('/host/map');
+  };
 
   return (
     <div className="landing">
@@ -10,7 +18,7 @@ export default function Landing() {
         <h1>Airbnb Market Insights</h1>
         <div className="persona-selection">
           <div 
-            className="persona-card traveler"
+            className="persona-card traveler hover-lift"
             onClick={() => navigate('/traveler/map')}
           >
             <h2>I'm a Traveler</h2>
@@ -18,14 +26,21 @@ export default function Landing() {
           </div>
 
           <div 
-            className="persona-card host"
-            onClick={() => navigate('/host/map')}
+            className="persona-card host hover-lift"
+            onClick={() => setShowHostPopup(true)}
           >
             <h2>I'm a Host</h2>
             <button>Explore as Host</button>
           </div>
         </div>
       </div>
+
+      {showHostPopup && (
+        <HostSelectionPopup
+          onClose={() => setShowHostPopup(false)}
+          onConfirm={handleHostSelection}
+        />
+      )}
     </div>
   );
 }
