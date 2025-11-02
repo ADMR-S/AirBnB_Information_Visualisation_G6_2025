@@ -25,6 +25,7 @@ export interface FilterState {
   year: '2020' | '2023';
   states: string[];
   cities: string[];
+  neighbourhoods: string[];
   roomTypes: string[];
   priceRange: [number, number];
   reviewRange: [number, number];

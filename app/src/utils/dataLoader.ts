@@ -40,6 +40,10 @@ export function getUniqueRoomTypes(data: AirbnbListing[]): string[] {
   return Array.from(new Set(data.map(d => d.room_type))).sort();
 }
 
+export function getUniqueNeighbourhoods(data: AirbnbListing[]): string[] {
+  return Array.from(new Set(data.map(d => d.neighbourhood))).filter(n => n && n.length > 0).sort();
+}
+
 export function getPriceRange(data: AirbnbListing[]): [number, number] {
   const prices = data.map(d => d.price).filter(p => p > 0);
   return [Math.min(...prices), Math.max(...prices)];

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useFilterStore } from '../stores/useFilterStore';
-import { getUniqueStates, getUniqueCities, getUniqueRoomTypes } from '../utils/dataLoader';
+import { getUniqueStates, getUniqueCities, getUniqueRoomTypes, getUniqueNeighbourhoods } from '../utils/dataLoader';
 import './FilterBar.css';
 
 const MultiSelect = ({ label, value, options, onChange, showDropdown, setShowDropdown }: any) => {
@@ -66,23 +66,26 @@ export default function FilterBar() {
   const location = useLocation();
   const isTraveler = location.pathname.startsWith('/traveler');
   const {
-    allData, year, states, cities, roomTypes, priceRange, reviewRange, availabilityRange,
+    allData, year, states, cities, neighbourhoods, roomTypes, priceRange, reviewRange, availabilityRange,
     minNightsRange, reviewsPerMonthRange, hostListingsRange, setYear, setStates, setCities,
-    setRoomTypes, setPriceRange, setReviewRange, setAvailabilityRange, setMinNightsRange,
+    setNeighbourhoods, setRoomTypes, setPriceRange, setReviewRange, setAvailabilityRange, setMinNightsRange,
     setReviewsPerMonthRange, setHostListingsRange, resetFilters
   } = useFilterStore();
 
   const [showStateDropdown, setShowStateDropdown] = useState(false);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
+  const [showNeighbourhoodDropdown, setShowNeighbourhoodDropdown] = useState(false);
   const [showRoomTypeDropdown, setShowRoomTypeDropdown] = useState(false);
   const [availableStates, setAvailableStates] = useState<string[]>([]);
   const [availableCities, setAvailableCities] = useState<string[]>([]);
+  const [availableNeighbourhoods, setAvailableNeighbourhoods] = useState<string[]>([]);
   const [availableRoomTypes, setAvailableRoomTypes] = useState<string[]>([]);
 
   useEffect(() => {
     if (allData.length > 0 && availableStates.length === 0) {
       setAvailableStates(getUniqueStates(allData));
       setAvailableCities(getUniqueCities(allData));
+      setAvailableNeighbourhoods(getUniqueNeighbourhoods(allData));
       setAvailableRoomTypes(getUniqueRoomTypes(allData));
     }
   }, [allData.length, availableStates.length, allData]);
@@ -112,6 +115,7 @@ export default function FilterBar() {
         <div className="filter-section">
           <MultiSelect label="States" value={states} options={availableStates} onChange={(s: string) => toggleItem(states, s, setStates)} showDropdown={showStateDropdown} setShowDropdown={setShowStateDropdown} />
           <MultiSelect label="Cities" value={cities} options={availableCities.slice(0, 20)} onChange={(c: string) => toggleItem(cities, c, setCities)} showDropdown={showCityDropdown} setShowDropdown={setShowCityDropdown} />
+          <MultiSelect label="Neighbourhoods" value={neighbourhoods} options={availableNeighbourhoods.slice(0, 50)} onChange={(n: string) => toggleItem(neighbourhoods, n, setNeighbourhoods)} showDropdown={showNeighbourhoodDropdown} setShowDropdown={setShowNeighbourhoodDropdown} />
           <MultiSelect label="Room Types" value={roomTypes} options={availableRoomTypes} onChange={(rt: string) => toggleItem(roomTypes, rt, setRoomTypes)} showDropdown={showRoomTypeDropdown} setShowDropdown={setShowRoomTypeDropdown} />
         </div>
 

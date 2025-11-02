@@ -9,6 +9,7 @@ interface FilterStore extends FilterState {
   setYear: (year: '2020' | '2023') => void;
   setStates: (states: string[]) => void;
   setCities: (cities: string[]) => void;
+  setNeighbourhoods: (neighbourhoods: string[]) => void;
   setRoomTypes: (roomTypes: string[]) => void;
   setPriceRange: (range: [number, number]) => void;
   setReviewRange: (range: [number, number]) => void;
@@ -24,6 +25,7 @@ const initialFilterState: FilterState = {
   year: '2023',
   states: [],
   cities: [],
+  neighbourhoods: [],
   roomTypes: [],
   priceRange: [0, 5000],
   reviewRange: [0, 1000],
@@ -56,6 +58,11 @@ export const useFilterStore = create<FilterStore>((set, get) => ({
 
   setCities: (cities) => {
     set({ cities });
+    get().applyFilters();
+  },
+
+  setNeighbourhoods: (neighbourhoods) => {
+    set({ neighbourhoods });
     get().applyFilters();
   },
 
@@ -115,6 +122,11 @@ export const useFilterStore = create<FilterStore>((set, get) => ({
     // City filter
     if (state.cities.length > 0) {
       filtered = filtered.filter(d => state.cities.includes(d.city));
+    }
+
+    // Neighbourhood filter
+    if (state.neighbourhoods.length > 0) {
+      filtered = filtered.filter(d => state.neighbourhoods.includes(d.neighbourhood));
     }
 
     // Room type filter
