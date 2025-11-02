@@ -22,6 +22,11 @@ const TRAVELER_CONFIG: TreemapViewConfig = {
         ({ name: city, level: 'city', parentState: listings[0]?.state, ...aggregate(listings) })) };
     }
     if (currentLevel === 2) {
+      const grouped = d3.group(filteredData, d => d.neighbourhood);
+      return { name: 'root', children: Array.from(grouped, ([neighbourhood, listings]) => 
+        ({ name: neighbourhood, level: 'neighbourhood', ...aggregate(listings) })) };
+    }
+    if (currentLevel === 3) {
       const grouped = d3.group(filteredData, d => d.room_type);
       return { name: 'root', children: Array.from(grouped, ([roomType, listings]) => 
         ({ name: roomType, level: 'room_type', ...aggregate(listings) })) };
