@@ -207,13 +207,22 @@ export function updateSelectedListing(
   
   // Calculate bubble radius based on zoom level
   const baseBubbleRadius = MAP_CONFIG.fisheye.listingBubbleRadius;
-  const listingBubbleRadius = baseBubbleRadius / Math.sqrt(zoomLevel);
+  let listingBubbleRadius = baseBubbleRadius / Math.sqrt(zoomLevel);
+  
+  // Make the bubble bigger at city level (when zoom is lower)
+  if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
+    // At city level, make it 3x larger to stand out among city bubbles
+    listingBubbleRadius = listingBubbleRadius * 3;
+  }
   
   // Get or create fisheye group
   let fisheyeGroup = container.select<SVGGElement>('g.fisheye-listings-group');
   if (fisheyeGroup.empty()) {
     fisheyeGroup = container.append('g').attr('class', 'fisheye-listings-group');
   }
+  
+  // Raise the group to ensure it's on top of other elements (like city bubbles)
+  fisheyeGroup.raise();
   
   // Update or create selected listing bubble (no fisheye distortion)
   let selectedBubble = fisheyeGroup.select<SVGCircleElement>('.selected-listing');

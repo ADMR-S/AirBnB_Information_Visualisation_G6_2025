@@ -50,16 +50,23 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
   useEffect(() => {
     if (injectedListing) {
       setSelectedListing(injectedListing);
-      // Don't show popup for injected listings per requirements
-      // The selected listing will be displayed below the map
-      
-      // Update the visualization to show the selected listing
-      if (gRef.current && projectionRef.current) {
-        const zoomLevel = currentZoomRef.current;
-        updateSelectedListing(gRef.current, filteredData, projectionRef.current, zoomLevel, injectedListing);
-      }
     }
-  }, [injectedListing, setSelectedListing, filteredData]);
+  }, [injectedListing, setSelectedListing]);
+
+  // Update selected listing visualization when selection changes (but not when data changes - that's handled by data effect)
+  useEffect(() => {
+    if (!gRef.current || !projectionRef.current || filteredData.length === 0) return;
+    
+    const zoomLevel = currentZoomRef.current;
+    
+    // Show selected listing at both city and neighborhood levels
+    if (selectedListing) {
+      updateSelectedListing(gRef.current, filteredData, projectionRef.current, zoomLevel, selectedListing);
+    } else {
+      // No selection - remove the selected listing pin
+      gRef.current.selectAll('.selected-listing').remove();
+    }
+  }, [selectedListing]); // Only depend on selectedListing, not filteredData
 
   // Initialization effect - runs once
   useEffect(() => {
@@ -81,6 +88,9 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
     const svg = d3.select(svgRef.current)
       .attr("width", width)
       .attr("height", height);
+
+    // Clear any existing content to avoid superposition
+    svg.selectAll('*').remove();
 
     // Create zoomable group
     const g = svg.append("g");
@@ -106,7 +116,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         }
         // Show cities as bubbles
         makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
-        // Show selected listing at city level too
+        // Show selected listing AFTER city bubbles so it appears on top
         updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
       } else {
         if (MAP_CONFIG.DEBUG_LOG) {
@@ -147,7 +157,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
             g.selectAll('.fisheye-lens-circle').remove();
             restoreBasemapPaths(g, originalPathsRef.current);
             setFisheyeActive(false);
-            // Update selected listing for city level view
+            // Update selected listing for city level (will be drawn on top of city bubbles)
             updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
           } else {
             // Zoomed into neighborhood level - show selected listing if any
@@ -199,7 +209,9 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         } else {
           setFisheyeActive(false);
           restoreBasemapPaths(g, originalPathsRef.current);
-          g.selectAll('.fisheye-listings-group').remove();
+          // Don't remove the entire group - just remove non-selected listings
+          g.selectAll('.fisheye-listing:not(.selected-listing)').remove();
+          g.selectAll('.fisheye-lens-circle').remove();
         }
       });
       
@@ -230,8 +242,17 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         svg.on('mousemove', null);
         svg.on('mouseleave', null);
       }
+      // Clear SVG content
+      svg.selectAll('*').remove();
+      // Reset refs
+      gRef.current = null;
+      projectionRef.current = null;
+      zoomBehaviorRef.current = null;
+      originalPathsRef.current.clear();
+      // Reset initialization flag so it reinitializes on remount
+      initializedRef.current = false;
     };
-  }, [isLoading]); // Empty dependency - only run once
+  }, [isLoading]); // Run when component mounts/unmounts or loading changes
 
   // Data update effect - runs when filtered data changes
   useEffect(() => {
@@ -282,6 +303,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           console.log(`[BubbleMap] Rendering CITY bubbles (zoom < ${MAP_CONFIG.zoom.cityThreshold})`);
         }
         makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
+        // Show selected listing AFTER city bubbles so it appears on top
         updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
       } else {
         if (MAP_CONFIG.DEBUG_LOG) {
