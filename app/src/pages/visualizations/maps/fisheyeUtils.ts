@@ -15,6 +15,19 @@ export function getFisheyeRadius(zoomLevel: number): number {
 }
 
 /**
+ * Calculates the fisheye radius based on current zoom level
+ * @param zoomLevel Current zoom level
+ * @returns Adjusted fisheye radius
+ */
+export function getFisheyeStrokeWidth(zoomLevel: number): number {
+  const baseStrokeWidth = MAP_CONFIG.fisheye.baseStrokeWidth;
+  const scaleFactor = MAP_CONFIG.fisheye.radiusScaleFactor;
+  // Radius decreases as you zoom in
+  return baseStrokeWidth / (zoomLevel * scaleFactor);
+}
+
+
+/**
  * Applies fisheye distortion to a point
  * @param x X coordinate
  * @param y Y coordinate
@@ -231,6 +244,7 @@ export function renderFisheyeListings(
   container.selectAll('.fisheye-lens-circle').remove();
   
   const fisheyeRadius = getFisheyeRadius(zoomLevel);
+  const fisheyeStrokeWidth = getFisheyeStrokeWidth(zoomLevel);
   // Bubble size decreases as zoom increases
   const baseBubbleRadius = MAP_CONFIG.fisheye.listingBubbleRadius;
   const listingBubbleRadius = baseBubbleRadius / Math.sqrt(zoomLevel);
@@ -241,6 +255,7 @@ export function renderFisheyeListings(
     .attr('cx', fisheyeFocus[0])
     .attr('cy', fisheyeFocus[1])
     .attr('r', fisheyeRadius)
+    .attr('stroke-width', fisheyeStrokeWidth)
     .style('pointer-events', 'none');
   
   // Project listings and filter those within fisheye radius
