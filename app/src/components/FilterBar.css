@@ -113,7 +113,7 @@
   background: var(--color-bg-white);
   border: 1px solid var(--color-border-medium);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px -2px var(--color-shadow-medium);
   z-index: 1000;
   max-height: 300px;
   overflow-y: auto;
@@ -165,5 +165,10 @@
 
 .filter-section:last-of-type {
   border-bottom: none;
+}
+
+.filter-active {
+  outline: 2px solid var(--color-purple-light);
+  outline-offset: -1px;
 }
 

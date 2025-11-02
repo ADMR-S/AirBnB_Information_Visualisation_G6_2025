@@ -4,54 +4,63 @@ import { useFilterStore } from '../stores/useFilterStore';
 import { getUniqueStates, getUniqueCities, getUniqueRoomTypes } from '../utils/dataLoader';
 import './FilterBar.css';
 
-const MultiSelect = ({ label, value, options, onChange, showDropdown, setShowDropdown }: any) => (
-  <div className="filter-group dropdown-filter">
-    <label>{label}</label>
-    <button className="dropdown-button" onClick={() => setShowDropdown(!showDropdown)}>
-      {value.length === 0 ? `All ${label}` : `${value.length} selected`}
-    </button>
-    {showDropdown && (
-      <div className="dropdown-menu">
-        {options.map((option: string) => (
-          <label key={option} className="dropdown-item">
-            <input type="checkbox" checked={value.includes(option)} onChange={() => onChange(option)} />
-            <span>{option}</span>
-          </label>
-        ))}
-      </div>
-    )}
-  </div>
-);
+const MultiSelect = ({ label, value, options, onChange, showDropdown, setShowDropdown }: any) => {
+  const isActive = value.length > 0;
+  return (
+    <div className="filter-group dropdown-filter">
+      <label>{label}</label>
+      <button className={`dropdown-button ${isActive ? 'filter-active' : ''}`} onClick={() => setShowDropdown(!showDropdown)}>
+        {value.length === 0 ? `All ${label}` : `${value.length} selected`}
+      </button>
+      {showDropdown && (
+        <div className="dropdown-menu">
+          {options.map((option: string) => (
+            <label key={option} className="dropdown-item">
+              <input type="checkbox" checked={value.includes(option)} onChange={() => onChange(option)} />
+              <span>{option}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
-const RangeFilter = ({ label, range, setRange, min = "0", max, step = "1", prefix = "" }: any) => (
-  <div className="filter-group">
-    <label>{label}</label>
-    <div className="range-inputs">
-      <div className="range-input">
-        <label>Min{prefix && ` (${prefix})`}</label>
-        <input
-          type="number"
-          step={step}
-          min={min}
-          max={range[1]}
-          value={range[0]}
-          onChange={(e) => setRange([parseFloat(e.target.value) || parseFloat(min), range[1]])}
-        />
-      </div>
-      <div className="range-input">
-        <label>Max{prefix && ` (${prefix})`}</label>
-        <input
-          type="number"
-          step={step}
-          min={range[0]}
-          max={max}
-          value={range[1]}
-          onChange={(e) => setRange([range[0], parseFloat(e.target.value) || parseFloat(max)])}
-        />
+const RangeFilter = ({ label, range, setRange, min = "0", max, step = "1", prefix = "", defaultRange }: any) => {
+  const minIsActive = range[0] !== defaultRange[0];
+  const maxIsActive = range[1] !== defaultRange[1];
+  return (
+    <div className="filter-group">
+      <label>{label}</label>
+      <div className="range-inputs">
+        <div className="range-input">
+          <label>Min{prefix && ` (${prefix})`}</label>
+          <input
+            type="number"
+            step={step}
+            min={min}
+            max={range[1]}
+            value={range[0]}
+            onChange={(e) => setRange([parseFloat(e.target.value) || parseFloat(min), range[1]])}
+            className={minIsActive ? 'filter-active' : ''}
+          />
+        </div>
+        <div className="range-input">
+          <label>Max{prefix && ` (${prefix})`}</label>
+          <input
+            type="number"
+            step={step}
+            min={range[0]}
+            max={max}
+            value={range[1]}
+            onChange={(e) => setRange([range[0], parseFloat(e.target.value) || parseFloat(max)])}
+            className={maxIsActive ? 'filter-active' : ''}
+          />
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default function FilterBar() {
   const location = useLocation();
@@ -107,13 +116,13 @@ export default function FilterBar() {
         </div>
 
         <div className="filter-section">
-          <RangeFilter label="Price Range" range={priceRange} setRange={setPriceRange} max="50000" prefix="$" />
-          <RangeFilter label="Reviews" range={reviewRange} setRange={setReviewRange} max="10000" />
-          <RangeFilter label="Availability" range={availabilityRange} setRange={setAvailabilityRange} max="365" />
-          <RangeFilter label="Minimum Nights" range={minNightsRange} setRange={setMinNightsRange} min="1" max="365" />
-          <RangeFilter label="Reviews/Month" range={reviewsPerMonthRange} setRange={setReviewsPerMonthRange} max="100" step="0.1" />
+          <RangeFilter label="Price Range" range={priceRange} setRange={setPriceRange} max="50000" prefix="$" defaultRange={[0, 5000]} />
+          <RangeFilter label="Reviews" range={reviewRange} setRange={setReviewRange} max="10000" defaultRange={[0, 1000]} />
+          <RangeFilter label="Availability" range={availabilityRange} setRange={setAvailabilityRange} max="365" defaultRange={[0, 365]} />
+          <RangeFilter label="Minimum Nights" range={minNightsRange} setRange={setMinNightsRange} min="1" max="365" defaultRange={[1, 365]} />
+          <RangeFilter label="Reviews/Month" range={reviewsPerMonthRange} setRange={setReviewsPerMonthRange} max="100" step="0.1" defaultRange={[0, 50]} />
           {!isTraveler && (
-            <RangeFilter label="Host Listings" range={hostListingsRange} setRange={setHostListingsRange} min="1" max="1000" />
+            <RangeFilter label="Host Listings" range={hostListingsRange} setRange={setHostListingsRange} min="1" max="1000" defaultRange={[1, 500]} />
           )}
         </div>
 
