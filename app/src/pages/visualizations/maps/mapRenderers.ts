@@ -412,3 +412,74 @@ export function renderColorLegend(
       .text(`${item.label} ($${Math.round(item.price)})`);
   });
 }
+
+/**
+ * Renders the reviews legend showing the relationship between color and number of reviews
+ * @param svg D3 selection of the SVG element
+ * @param width Width of the SVG
+ * @param height Height of the SVG
+ * @param minReviews Minimum review count
+ * @param maxReviews Maximum review count
+ */
+export function renderReviewsLegend(
+  svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
+  width: number,
+  height: number,
+  minReviews: number,
+  maxReviews: number
+) {
+  // Remove existing reviews legend
+  svg.selectAll('.reviews-legend').remove();
+  
+  // Create color scale for reviews (medium blue to dark blue)
+  const colorScale = d3.scaleSequential((t: number) => d3.interpolateBlues(0.3 + t * 0.7))
+    .domain([minReviews, maxReviews]);
+  
+  // Create legend group - positioned at the same place as price legend
+  const legend = svg.append("g")
+    .attr("class", "reviews-legend")
+    .attr("transform", `translate(${width - 150}, ${height - 200})`);
+  
+  // Add title
+  legend.append("text")
+    .attr("x", 0)
+    .attr("y", 0)
+    .attr("font-size", "12px")
+    .attr("font-weight", "bold")
+    .attr("fill", "#333")
+    .style("text-shadow", "1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white")
+    .text("Number of reviews");
+  
+  const circleRadius = 8;
+  const circleSpacing = 30;
+  
+  // Data for the two circles
+  const reviewData = [
+    { reviews: minReviews, label: "Few reviews", y: 25 },
+    { reviews: maxReviews, label: "Many reviews", y: 25 + circleSpacing }
+  ];
+  
+  // Create circles and labels
+  reviewData.forEach(item => {
+    // Draw circle
+    legend.append("circle")
+      .attr("cx", 10)
+      .attr("cy", item.y)
+      .attr("r", circleRadius)
+      .attr("fill", colorScale(item.reviews) as string)
+      .attr("stroke", "#333")
+      .attr("stroke-width", 1.5);
+    
+    // Add label text with review count in parentheses
+    legend.append("text")
+      .attr("x", 10 + circleRadius + 8)
+      .attr("y", item.y)
+      .attr("dy", "0.35em")
+      .attr("font-size", "11px")
+      .attr("font-weight", "bold")
+      .attr("fill", "#333")
+      .style("text-shadow", "1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white")
+      .text(`${item.label} (${Math.round(item.reviews)})`);
+  });
+}
+
