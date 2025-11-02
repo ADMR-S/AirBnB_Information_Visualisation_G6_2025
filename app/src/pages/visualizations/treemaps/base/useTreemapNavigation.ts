@@ -1,4 +1,4 @@
-import { useFilterStore } from '../../../stores/useFilterStore';
+import { useFilterStore } from '../../../../stores/useFilterStore';
 
 export function useTreemapNavigation() {
   const { states, cities, setStates, setCities } = useFilterStore();

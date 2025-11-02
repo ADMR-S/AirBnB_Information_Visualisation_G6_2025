@@ -38,14 +38,6 @@ export const EXAMPLE_BADGES = {
   },
 } as const;
 
-/**
- * Calculate what percentile a threshold represents
- * 
- * @param listings - Array of individual listings
- * @param badge - Badge configuration
- * @param threshold - The threshold value to evaluate
- * @returns Percentile (0-100) that this threshold represents
- */
 export function calculatePercentileFromThreshold(
   listings: any[],
   badge: BadgeConfig,
@@ -65,14 +57,6 @@ export function calculatePercentileFromThreshold(
   return Math.round(percentile);
 }
 
-/**
- * Calculate what percentage of a node's listings meet the exceptional threshold
- * 
- * @param nodeListings - Individual listings within this node
- * @param badge - Badge configuration
- * @param threshold - The exceptional threshold (e.g., top 5% globally)
- * @returns Percentage (0-100) of listings that meet threshold
- */
 export function calculateConcentration(
   nodeListings: any[],
   badge: BadgeConfig,
@@ -87,16 +71,6 @@ export function calculateConcentration(
   return (meetingThreshold / nodeListings.length) * 100;
 }
 
-/**
- * Check if a node qualifies for badges based on concentration of exceptional listings
- * A node gets a badge if it has a high concentration of individually exceptional properties
- * 
- * @param nodeListings - Individual listings within this node
- * @param badges - Badge configurations
- * @param thresholds - Pre-calculated global thresholds
- * @param minConcentration - Minimum % of listings that must meet threshold (default: 15%)
- * @returns Array of badges this node qualifies for
- */
 export function getApplicableBadgesByConcentration(
   nodeListings: any[],
   badges: readonly BadgeConfig[],
