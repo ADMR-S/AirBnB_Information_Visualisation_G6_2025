@@ -22,3 +22,5 @@ MAP
 
     Show hull of selected data on the map as a whole per city ?
 
+    Double contour sélection
+

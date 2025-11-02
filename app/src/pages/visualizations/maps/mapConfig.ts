@@ -7,7 +7,7 @@ export const MAP_CONFIG = {
     translate: [480, 300] as [number, number] // [width/2, height/2]
   },
   zoom: {
-    scaleExtent: [1, 100] as [number, number],
+    scaleExtent: [1, 2000] as [number, number],
     cityThreshold: 3,
     transitionDuration: 300,
     zoomFactor: 1.5
@@ -17,7 +17,7 @@ export const MAP_CONFIG = {
     neighborhoodSizeRange: [2, 20] as [number, number],
     fillOpacity: 0.6,
     strokeColor: '#fff',
-    strokeWidth: 0.5
+    strokeWidth: 0.02
   },
   colors: {
     interpolateRange: [0.4, 1.0] as [number, number] // Range for d3.interpolateBlues

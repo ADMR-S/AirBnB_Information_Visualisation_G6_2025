@@ -197,7 +197,7 @@ export function updateSelectedListing(
       .attr('fill', '#FF5722')
       .attr('fill-opacity', 0.9)
       .attr('stroke', '#fff')
-      .attr('stroke-width', 0.15)
+      .attr('stroke-width', 0.02)
       .style('cursor', 'pointer')
       .style('pointer-events', 'none');
   }
@@ -291,10 +291,16 @@ export function renderFisheyeListings(
     .attr('fill', '#2196F3')
     .attr('fill-opacity', 0.7)
     .attr('stroke', '#fff')
-    .attr('stroke-width', 0.15)
+    .attr('stroke-width', 0.02)
     .style('cursor', 'pointer')
     .on('click', function(event: MouseEvent, d: ProjectedListing) {
       event.stopPropagation();
+      
+      // Reset hover state on the clicked bubble
+      d3.select(this)
+        .attr('fill', '#2196F3')
+        .attr('r', listingBubbleRadius);
+      
       const rect = (event.target as SVGCircleElement).getBoundingClientRect();
       showListingPopup(
         d.listing,
@@ -308,6 +314,9 @@ export function renderFisheyeListings(
       // Remove old selected listing and create new one
       fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing').remove();
       
+      // Hide the clicked bubble by making it invisible
+      d3.select(this).style('opacity', 0);
+      
       // Create selected listing bubble with fisheye distortion
       const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
       fisheyeGroup.append('circle')
@@ -318,7 +327,7 @@ export function renderFisheyeListings(
         .attr('fill', '#FF5722')
         .attr('fill-opacity', 0.9)
         .attr('stroke', '#fff')
-        .attr('stroke-width', 0.15)
+        .attr('stroke-width', 0.02)
         .style('pointer-events', 'none'); // Prevent interaction with selected bubble
     })
     .on('mouseover', function(this: SVGCircleElement) {
@@ -355,7 +364,7 @@ export function renderFisheyeListings(
       .attr('fill', '#FF5722')
       .attr('fill-opacity', 0.9)
       .attr('stroke', '#fff')
-      .attr('stroke-width', 0.15)
+      .attr('stroke-width', 0.02)
       .style('pointer-events', 'none');
   } else if (selectedListingId) {
     // Selected listing exists but is outside fisheye - keep it at original position
@@ -372,7 +381,7 @@ export function renderFisheyeListings(
             .attr('fill', '#FF5722')
             .attr('fill-opacity', 0.9)
             .attr('stroke', '#fff')
-            .attr('stroke-width', 0.15)
+            .attr('stroke-width', 0.02)
             .style('pointer-events', 'none');
         }
         
