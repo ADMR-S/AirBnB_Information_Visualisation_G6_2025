@@ -252,6 +252,7 @@ export function updateSelectedListing(
  * @param fisheyeFocus Focus point of the fisheye
  * @param zoomLevel Current zoom level
  * @param onSelect Callback when a listing is selected or cleared
+ * @param injectedSelectedListing Optional selected listing from context (when no popup exists)
  */
 export function renderFisheyeListings(
   container: d3.Selection<SVGGElement, unknown, null, undefined>,
@@ -259,10 +260,11 @@ export function renderFisheyeListings(
   projection: d3.GeoProjection,
   fisheyeFocus: [number, number],
   zoomLevel: number,
-  onSelect?: (listing: AirbnbListing | null) => void
+  onSelect?: (listing: AirbnbListing | null) => void,
+  injectedSelectedListing?: AirbnbListing | null
 ): void {
-  // Get currently selected listing ID
-  const selectedListingId = getSelectedListingId();
+  // Get currently selected listing ID from popup, or from injected listing
+  const selectedListingId = getSelectedListingId() || injectedSelectedListing?.id || null;
   
   // Remove existing non-selected fisheye listings
   container.selectAll('.fisheye-listing:not(.selected-listing)').remove();

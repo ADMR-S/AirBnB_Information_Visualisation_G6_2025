@@ -1,11 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSelectedListing } from '../contexts/SelectedListingContext';
 import HostSelectionPopup from '../components/HostSelectionPopup';
 import './Landing.css';
 
 export default function Landing() {
   const navigate = useNavigate();
   const [showHostPopup, setShowHostPopup] = useState(false);
+  const { setSelectedListing } = useSelectedListing();
+  
+  // Reset selected listing when landing on homepage
+  useEffect(() => {
+    setSelectedListing(null);
+  }, [setSelectedListing]);
 
   const handleHostSelection = () => {
     setShowHostPopup(false);

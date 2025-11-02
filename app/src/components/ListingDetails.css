@@ -143,6 +143,15 @@
   box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
 }
 
+.action-link.active {
+  background: #2196F3;
+  color: white;
+  border-color: #2196F3;
+  font-weight: 600;
+  cursor: default;
+  pointer-events: none;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .listing-details-content {

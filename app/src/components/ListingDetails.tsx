@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import type { AirbnbListing, Persona } from '../types/airbnb.types';
 import './ListingDetails.css';
 
@@ -9,6 +9,8 @@ interface ListingDetailsProps {
 }
 
 export default function ListingDetails({ listing, persona, onClear }: ListingDetailsProps) {
+  const location = useLocation();
+  
   // Navigation links based on persona
   const navigationLinks = persona === 'traveler' 
     ? [
@@ -92,15 +94,18 @@ export default function ListingDetails({ listing, persona, onClear }: ListingDet
         <div className="listing-details-actions">
           <p className="action-label">Explore this listing in other views:</p>
           <div className="action-links">
-            {navigationLinks.map(link => (
-              <Link 
-                key={link.path} 
-                to={link.path} 
-                className="action-link"
-              >
-                {link.label}
-              </Link>
-            ))}
+            {navigationLinks.map(link => {
+              const isActive = location.pathname === link.path;
+              return (
+                <Link 
+                  key={link.path} 
+                  to={link.path} 
+                  className={`action-link ${isActive ? 'active' : ''}`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
           </div>
         </div>
       </div>

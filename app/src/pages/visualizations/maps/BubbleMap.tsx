@@ -60,13 +60,25 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
     const zoomLevel = currentZoomRef.current;
     
     // Show selected listing at both city and neighborhood levels
-    if (selectedListing) {
+    // But skip if fisheye is active - renderFisheyeListings handles it
+    if (selectedListing && !fisheyeActive) {
       updateSelectedListing(gRef.current, filteredData, projectionRef.current, zoomLevel, selectedListing);
-    } else {
+    } else if (!selectedListing) {
       // No selection - remove the selected listing pin
       gRef.current.selectAll('.selected-listing').remove();
     }
-  }, [selectedListing]); // Only depend on selectedListing, not filteredData
+  }, [selectedListing, fisheyeActive, filteredData]); // Depend on fisheyeActive too
+
+  // Cleanup effect - close popup when leaving the map view
+  useEffect(() => {
+    return () => {
+      // Remove any listing popup when component unmounts
+      const popup = document.querySelector('.listing-popup');
+      if (popup) {
+        popup.remove();
+      }
+    };
+  }, []);
 
   // Initialization effect - runs once
   useEffect(() => {
@@ -176,7 +188,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           
           // Re-render fisheye listings with updated zoom
           g.selectAll('.fisheye-listings-group').remove();
-          renderFisheyeListings(g, filteredData, projection, fisheyePosition, zoomLevel, setSelectedListingRef.current);
+          renderFisheyeListings(g, filteredData, projection, fisheyePosition, zoomLevel, setSelectedListingRef.current, selectedListingRef.current);
         }
       });
 
@@ -205,7 +217,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           applyFisheyeToBasemap(g, [mouseX, mouseY], fisheyeRadius, originalPathsRef.current);
           
           // Render fisheye listings (this will handle the selected listing too)
-          renderFisheyeListings(g, filteredData, projection, [mouseX, mouseY], currentZoomRef.current, setSelectedListingRef.current);
+          renderFisheyeListings(g, filteredData, projection, [mouseX, mouseY], currentZoomRef.current, setSelectedListingRef.current, selectedListingRef.current);
         } else {
           setFisheyeActive(false);
           restoreBasemapPaths(g, originalPathsRef.current);
