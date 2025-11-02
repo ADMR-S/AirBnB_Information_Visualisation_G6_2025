@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import { kernelEpanechnikov, kernelDensityEstimator } from '../utils/kernel';
 import { useFilterStore } from '../stores/useFilterStore';
@@ -87,7 +87,7 @@ export default function ViolinChart({ dataUrl, groupBy = 'room_type' }: ViolinCh
           .attr('stroke', '#333')
           .attr('stroke-width', 0.8)
           .attr('opacity', 0.7)
-          .attr('d', area as any);
+          .attr('d', area);
 
         const median = d3.median(vals);
         g.append('line')
