@@ -270,7 +270,6 @@ export function updateSelectedListing(
  */
 export function renderHostProperties(
   container: d3.Selection<SVGGElement, unknown, null, undefined>,
-  listings: AirbnbListing[],
   hostListings: AirbnbListing[],
   projection: d3.GeoProjection,
   zoomLevel: number
@@ -335,7 +334,6 @@ function createSelectedListingCircle(
   x: number,
   y: number,
   radius: number,
-  strokeWidth: number
 ): void {
   group.append('circle')
     .attr('class', 'fisheye-listing selected-listing')
@@ -480,7 +478,7 @@ export function renderFisheyeListings(
       
       // Create selected listing bubble with fisheye distortion
       const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
-      createSelectedListingCircle(fisheyeGroup, distorted.x, distorted.y, listingBubbleRadius, fisheyeStrokeWidth);
+      createSelectedListingCircle(fisheyeGroup, distorted.x, distorted.y, listingBubbleRadius);
     })
     .on('mouseover', function(this: SVGCircleElement) {
       d3.select(this)
@@ -509,7 +507,7 @@ export function renderFisheyeListings(
     fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing-center').remove();
     
     // Create selected listing bubble with fisheye distortion
-    createSelectedListingCircle(fisheyeGroup, distorted.x, distorted.y, listingBubbleRadius, fisheyeStrokeWidth);
+    createSelectedListingCircle(fisheyeGroup, distorted.x, distorted.y, listingBubbleRadius);
   } else if (selectedListingId) {
     // Selected listing exists but is outside fisheye - keep it at original position
     const selectedListing = listings.find(l => l.id === selectedListingId);
