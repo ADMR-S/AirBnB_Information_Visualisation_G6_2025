@@ -20,43 +20,34 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
   const containerRef = useRef<HTMLDivElement>(null);
   const maxCityCountRef = useRef<number>(0);
   const currentZoomRef = useRef<number>(1);
+  const currentTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const originalPathsRef = useRef<Map<SVGPathElement | SVGPolygonElement, string>>(new Map());
+  const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const projectionRef = useRef<d3.GeoProjection | null>(null);
+  const initializedRef = useRef<boolean>(false);
   const [fisheyeActive, setFisheyeActive] = useState(false);
   const [fisheyePosition, setFisheyePosition] = useState<[number, number]>([0, 0]);
 
   // Aggregate data at the component level (must be called at top level, not inside useEffect)
   const { cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount } = useAggregatedData(filteredData);
 
+  // Initialization effect - runs once
   useEffect(() => {
-    if (!svgRef.current || !containerRef.current || filteredData.length === 0) return;
+    if (!svgRef.current || !containerRef.current || initializedRef.current) return;
 
-    // Re-attach event listeners to any existing popups
-    const existingPopups = document.querySelectorAll('.listing-popup');
-    existingPopups.forEach(popup => {
-      const closeButton = popup.querySelector('.listing-popup-close');
-      if (closeButton) {
-        // Remove old listeners by cloning and replacing
-        const newCloseButton = closeButton.cloneNode(true);
-        closeButton.parentNode?.replaceChild(newCloseButton, closeButton);
-        // Add fresh listener
-        newCloseButton.addEventListener('click', () => {
-          popup.remove();
-        });
-      }
-    });
+    initializedRef.current = true;
 
     const container = containerRef.current;
     const width = container.clientWidth || MAP_CONFIG.defaultWidth;
     const height = MAP_CONFIG.defaultHeight;
-
-    d3.select(svgRef.current).selectAll('*').remove();
 
     // us.json has pre-projected coordinates, so use null projection for the map
     const path = createNullProjectionPath();
     
     // Use the same projection as used to create us.json (from Makefile)
     const projection = createProjection();
+    projectionRef.current = projection;
 
     const svg = d3.select(svgRef.current)
       .attr("width", width)
@@ -64,17 +55,7 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
 
     // Create zoomable group
     const g = svg.append("g");
-
-    // Log aggregated data
-    if (MAP_CONFIG.DEBUG_LOG) {
-      console.log(`[BubbleMap] Processing ${filteredData.length} listings`);
-      console.log(`[BubbleMap] Aggregated to ${cityBubbles.length} cities, ${neighborhoodFields.length} neighborhoods, ${cityBoundaries.length} city boundaries`);
-    }
-    
-    // Update max for consistent scaling
-    if (maxCityCount > maxCityCountRef.current) {
-      maxCityCountRef.current = maxCityCount;
-    }
+    gRef.current = g;
 
     // Function to render based on zoom level
     function renderVisualization(zoomLevel: number) {
@@ -118,8 +99,9 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
         const zoomLevel = event.transform.k;
         const previousZoomLevel = currentZoomRef.current;
         
-        // Always update the current zoom level
+        // Always update the current zoom level and transform
         currentZoomRef.current = zoomLevel;
+        currentTransformRef.current = event.transform;
         
         // Re-render visualization if we cross the threshold
         if ((previousZoomLevel < MAP_CONFIG.zoom.cityThreshold && zoomLevel >= MAP_CONFIG.zoom.cityThreshold) || 
@@ -215,13 +197,80 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
     // Cleanup function
     return () => {
       // Remove all event listeners to prevent memory leaks
-      svg.on('mousemove', null);
-      svg.on('mouseleave', null);
-      
-      // Note: We don't remove popups or reset state to preserve user's view
-      // Popups will have their event listeners re-attached on next mount
+      if (svg) {
+        svg.on('mousemove', null);
+        svg.on('mouseleave', null);
+      }
     };
-  }, [filteredData, persona, cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount]);
+  }, [isLoading]); // Empty dependency - only run once
+
+  // Data update effect - runs when filtered data changes
+  useEffect(() => {
+    if (!gRef.current || !projectionRef.current || filteredData.length === 0) return;
+
+    const g = gRef.current;
+    const projection = projectionRef.current;
+
+    // Re-attach event listeners to any existing popups
+    const existingPopups = document.querySelectorAll('.listing-popup');
+    existingPopups.forEach(popup => {
+      const closeButton = popup.querySelector('.listing-popup-close');
+      if (closeButton) {
+        const newCloseButton = closeButton.cloneNode(true);
+        closeButton.parentNode?.replaceChild(newCloseButton, closeButton);
+        newCloseButton.addEventListener('click', () => {
+          popup.remove();
+        });
+      }
+    });
+
+    // Log aggregated data
+    if (MAP_CONFIG.DEBUG_LOG) {
+      console.log(`[BubbleMap] Data update - Processing ${filteredData.length} listings`);
+      console.log(`[BubbleMap] Aggregated to ${cityBubbles.length} cities, ${neighborhoodFields.length} neighborhoods, ${cityBoundaries.length} city boundaries`);
+    }
+    
+    // Update max for consistent scaling
+    if (maxCityCount > maxCityCountRef.current) {
+      maxCityCountRef.current = maxCityCount;
+    }
+
+    // Function to render based on zoom level
+    function renderVisualization(zoomLevel: number) {
+      if (MAP_CONFIG.DEBUG_LOG) {
+        console.log(`[BubbleMap] renderVisualization called with zoomLevel: ${zoomLevel.toFixed(2)}`);
+      }
+      
+      // Remove existing visualizations
+      g.selectAll('.bubble').remove();
+      g.selectAll('.neighborhood-fields').remove();
+      g.selectAll('.city-boundaries').remove();
+
+      if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
+        if (MAP_CONFIG.DEBUG_LOG) {
+          console.log(`[BubbleMap] Rendering CITY bubbles (zoom < ${MAP_CONFIG.zoom.cityThreshold})`);
+        }
+        makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
+        updateSelectedListing(g, filteredData, projection, zoomLevel);
+      } else {
+        if (MAP_CONFIG.DEBUG_LOG) {
+          console.log(`[BubbleMap] Rendering NEIGHBORHOOD fields (zoom >= ${MAP_CONFIG.zoom.cityThreshold})`);
+        }
+        makeCityBoundaries(g, projection, cityBoundaries);
+        makeNeighborhoodFields(g, projection, neighborhoodFields);
+      }
+    }
+
+    // Re-render with current zoom level (preserving zoom state)
+    const currentZoom = currentZoomRef.current;
+    renderVisualization(currentZoom);
+
+    // Restore the transform to maintain zoom and position
+    if (svgRef.current && zoomBehaviorRef.current) {
+      const svg = d3.select(svgRef.current);
+      svg.call(zoomBehaviorRef.current.transform, currentTransformRef.current);
+    }
+  }, [filteredData, cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount]);
 
   function handleZoomIn() {
     if (!svgRef.current || !zoomBehaviorRef.current) return;

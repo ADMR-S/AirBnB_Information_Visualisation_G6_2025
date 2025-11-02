@@ -1,5 +1,3 @@
-import type { AirbnbListing } from './airbnb.types';
-
 export interface BubbleData {
   label: string;
   latitude: number;
@@ -12,9 +10,7 @@ export interface NeighborhoodField {
   label: string;
   count: number;
   avgPrice: number;
-  // Polygon hull points [lng, lat]
   hullPoints: [number, number][];
-  listings: AirbnbListing[];
 }
 
 export interface CityBoundary {
