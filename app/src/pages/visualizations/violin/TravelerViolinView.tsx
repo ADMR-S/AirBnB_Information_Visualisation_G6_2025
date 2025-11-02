@@ -345,19 +345,7 @@ export default function TravelerViolinView() {
           opacity: selectedRoomType ? 1 : 0,
         }}
       >
-        <button
-          onClick={() => setSelectedRoomType(null)}
-          style={{
-            marginBottom: 10,
-            padding: '6px 12px',
-            background: '#f3f4f6',
-            border: '1px solid #d1d5db',
-            borderRadius: 6,
-            cursor: 'pointer',
-          }}
-        >
-          ← Retour
-        </button>
+        
         <svg ref={svgRefCity} style={{ width: '100%', maxWidth: 900, height: 420 }} />
       </div>
     </div>
