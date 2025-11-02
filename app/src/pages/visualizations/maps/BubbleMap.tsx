@@ -6,7 +6,7 @@ import { useSelectedListing } from '../../../contexts/SelectedListingContext';
 import { useHostSelection } from '../../../contexts/HostSelectionContext';
 import { useFilterStore } from '../../../stores/useFilterStore';
 import { createProjection, createNullProjectionPath } from './mapUtils';
-import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap } from './mapRenderers';
+import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap, renderSizeLegend, renderColorLegend } from './mapRenderers';
 import { renderFisheyeListings, applyFisheyeToBasemap, restoreBasemapPaths, getFisheyeRadius, updateSelectedListing, renderHostProperties } from './fisheyeUtils';
 import { MAP_CONFIG } from './mapConfig';
 import ListingDetails from '../../../components/ListingDetails';
@@ -151,7 +151,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
         // Show host properties as green triangles (for host persona)
         if (hostListings.length > 0) {
-          renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+          renderHostProperties(g, hostListings, projection, zoomLevel);
         }
       } else {
         if (MAP_CONFIG.DEBUG_LOG) {
@@ -163,7 +163,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         makeNeighborhoodFields(g, projection, neighborhoodFields);
         // Show host properties as green triangles (for host persona)
         if (hostListings.length > 0) {
-          renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+          renderHostProperties(g, hostListings, projection, zoomLevel);
         }
       }
     }
@@ -188,6 +188,21 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           d3.selectAll('.viz-tooltip').remove();
           
           renderVisualization(zoomLevel);
+          
+          // Update legends when crossing zoom threshold
+          const prices = filteredData.map(d => d.price);
+          const minPrice = d3.min(prices) || 0;
+          const maxPrice = d3.max(prices) || 1;
+          
+          if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
+            // City level: show city bubble size legend
+            renderSizeLegend(svg, width, height, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
+          } else {
+            // Neighborhood level: show neighborhood size legend
+            const maxNeighborhoodCount = d3.max(neighborhoodFields, d => d.count) || 1;
+            renderSizeLegend(svg, width, height, maxNeighborhoodCount, MAP_CONFIG.bubbles.neighborhoodSizeRange);
+          }
+          renderColorLegend(svg, width, height, minPrice, maxPrice);
           
           // Clean up fisheye elements when zooming out to city level
           if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
@@ -267,7 +282,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
           // Re-render host properties after fisheye deactivation
           if (hostListings.length > 0) {
-            renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+            renderHostProperties(g, hostListings, projection, zoomLevel);
           }
         }
       });
@@ -350,7 +365,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
         // Show host properties as green triangles (for host persona)
         if (hostListings.length > 0) {
-          renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+          renderHostProperties(g, hostListings, projection, zoomLevel);
         }
       } else {
         if (MAP_CONFIG.DEBUG_LOG) {
@@ -360,7 +375,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         makeNeighborhoodFields(g, projection, neighborhoodFields);
         // Show host properties as green triangles (for host persona)
         if (hostListings.length > 0) {
-          renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+          renderHostProperties(g, hostListings, projection, zoomLevel);
         }
       }
     }
@@ -375,6 +390,36 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
       svg.call(zoomBehaviorRef.current.transform, currentTransformRef.current);
     }
   }, [filteredData, cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount, hostListings]);
+
+  // Legend rendering effect - updates when data changes
+  useEffect(() => {
+    if (!svgRef.current || !containerRef.current || filteredData.length === 0) return;
+
+    const container = containerRef.current;
+    const width = container.clientWidth || MAP_CONFIG.defaultWidth;
+    const height = MAP_CONFIG.defaultHeight;
+    const svg = d3.select(svgRef.current);
+
+    // Calculate min and max prices from filtered data
+    const prices = filteredData.map(d => d.price);
+    const minPrice = d3.min(prices) || 0;
+    const maxPrice = d3.max(prices) || 1;
+
+    // Render legends based on current zoom level
+    const currentZoom = currentZoomRef.current;
+    
+    if (currentZoom < MAP_CONFIG.zoom.cityThreshold) {
+      // City level: show city bubble size legend
+      renderSizeLegend(svg, width, height, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
+    } else {
+      // Neighborhood level: show neighborhood size legend
+      const maxNeighborhoodCount = d3.max(neighborhoodFields, d => d.count) || 1;
+      renderSizeLegend(svg, width, height, maxNeighborhoodCount, MAP_CONFIG.bubbles.neighborhoodSizeRange);
+    }
+    
+    // Always show color legend
+    renderColorLegend(svg, width, height, minPrice, maxPrice);
+  }, [filteredData, neighborhoodFields, maxCityCount]);
 
   function handleZoomIn() {
     if (!svgRef.current || !zoomBehaviorRef.current) return;
