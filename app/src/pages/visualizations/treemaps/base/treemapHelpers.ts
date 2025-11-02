@@ -2,7 +2,6 @@ import * as d3 from 'd3';
 import type { AirbnbListing } from '../../../../types/airbnb.types';
 import { showTooltip, hideTooltip } from '../../../../utils/tooltip';
 import { getApplicableBadgesByConcentration, type BadgeConfig } from './visualBadges';
-import { TREEMAP_CONFIG } from './treemapConfig';
 
 export interface TreemapNode {
   name: string;
@@ -44,24 +43,6 @@ export function categorizeAvailability(avail: number): string {
   return 'Short-term (<90 days)';
 }
 
-const addText = (
-  nodes: any,
-  x: number,
-  y: number,
-  getText: (d: any) => string,
-  fontSize: string,
-  bold = false
-) => {
-  nodes.append('text')
-    .attr('x', x)
-    .attr('y', y)
-    .text(getText)
-    .attr('font-size', fontSize)
-    .attr('fill', 'white')
-    .attr('font-weight', bold ? 'bold' : 'normal')
-    .style('pointer-events', 'none');
-};
-
 /**
  * Renders a treemap visualization as SVG
  */
@@ -78,9 +59,56 @@ export function renderTreemapSVG(
     finalLevel: string;
   }
 ) {
+  // Create a container group for zoom/pan
+  const container = svg.selectAll('.treemap-container')
+    .data([null])
+    .join('g')
+    .attr('class', 'treemap-container');
+
+  // Function to update content visibility and scale based on zoom level
+  const updateContentVisibility = (scale: number) => {
+    container.selectAll('.leaf-node').each(function(d: any) {
+      const node = d3.select(this);
+      const width = (d.x1 - d.x0) * scale;
+      const height = (d.y1 - d.y0) * scale;
+      
+      // Show text only if rectangle is large enough after zoom
+      const showTitle = width > 110 && height > 40;
+      const showCount = width > 110 && height > 70;
+      
+      // Scale all text inversely with zoom to maintain consistent visual size
+      node.select('.node-title')
+        .style('display', showTitle ? 'block' : 'none')
+        .attr('font-size', `${1.25 / scale}rem`);
+      
+      node.select('.node-count')
+        .style('display', showCount ? 'block' : 'none')
+        .attr('font-size', `${1.0 / scale}rem`);
+      
+      node.select('.node-badge')
+        .attr('font-size', `${1.0 / scale}rem`);
+    });
+  };
+
+  // Setup zoom behavior
+  const zoom = d3.zoom<SVGSVGElement, unknown>()
+    .scaleExtent([0.5, 8]) // Allow zoom from 50% to 800%
+    .on('zoom', (event) => {
+      container.attr('transform', event.transform);
+      updateContentVisibility(event.transform.k);
+    });
+
+  // Apply zoom to SVG and reset zoom on double-click
+  svg.call(zoom as any)
+    .on('dblclick.zoom', null) // Disable default double-click zoom
+    .on('dblclick', () => {
+      // Reset zoom on double-click
+      svg.transition().duration(750).call(zoom.transform as any, d3.zoomIdentity);
+    });
+
   // Create a group element for each leaf node
   // Position it at the computed treemap coordinates
-  const nodes = svg.selectAll('.leaf-node')
+  const nodes = container.selectAll('.leaf-node')
     .data(root.leaves())
     .join('g')
     .attr('class', 'leaf-node')
@@ -114,56 +142,62 @@ export function renderTreemapSVG(
       }
     });
 
-  // Add node name label (hidden if rectangle too narrow)
-  addText(
-    nodes,
-    8,
-    25,
-    (d: any) => (d.x1 - d.x0 < TREEMAP_CONFIG.minWidthForLabel ? '' : d.data.name),
-    '20px',
-    true
-  );
+  // Add text labels (hidden by default, shown on zoom) - positioned relatively
+  nodes.append('text')
+    .attr('class', 'node-title')
+    .attr('x', (d: any) => (d.x1 - d.x0) * 0.05) // 5% from left edge
+    .attr('y', (d: any) => (d.y1 - d.y0) * 0.2) // 20% from top
+    .text((d: any) => d.data.name)
+    .attr('font-size', '1.25rem')
+    .attr('fill', 'white')
+    .attr('font-weight', 'bold')
+    .style('pointer-events', 'none')
+    .style('display', 'none'); // Hidden by default
 
-  // Add listing count and badge icons
+  nodes.append('text')
+    .attr('class', 'node-count')
+    .attr('x', (d: any) => (d.x1 - d.x0) * 0.05) // 5% from left edge
+    .attr('y', (d: any) => (d.y1 - d.y0) * 0.4) // 40% from top
+    .text((d: any) => `${d.data.totalListings} listings`)
+    .attr('font-size', '1rem')
+    .attr('fill', 'white')
+    .style('pointer-events', 'none')
+    .style('display', 'none'); // Hidden by default
+
+  // Add badges (always visible, centered in rectangles)
   nodes.each(function(d: any) {
     const width = d.x1 - d.x0;
-    
-    // Skip text if rectangle too narrow
-    if (width < TREEMAP_CONFIG.minWidthForListingCount) return;
-
-    // Render the listing count text
-    d3.select(this).append('text')
-      .attr('x', 8)
-      .attr('y', 55)
-      .text(`${d.data.totalListings} listings`)
-      .attr('font-size', '18px')
-      .attr('fill', 'var(--color-text-white)')
-      .style('pointer-events', 'none');
+    const height = d.y1 - d.y0;
 
     // Get applicable badges based on listing concentration
-    let applicableBadges: BadgeConfig[] = [];
-    if (options.badges && options.badgeThresholds && options.minConcentrations) {
-      const nodeListings = d.data.listings;
-      if (nodeListings && Array.isArray(nodeListings) && nodeListings.length > 0) {
-        applicableBadges = getApplicableBadgesByConcentration(
-          nodeListings,
-          options.badges,
-          options.badgeThresholds,
-          options.minConcentrations
-        );
-      }
-    }
+    if (!options.badges || !options.badgeThresholds || !options.minConcentrations) return;
     
-    // Render badge icons on a separate line below
+    const nodeListings = d.data.listings;
+    if (!nodeListings || !Array.isArray(nodeListings) || nodeListings.length === 0) return;
+    
+    const applicableBadges = getApplicableBadgesByConcentration(
+      nodeListings,
+      options.badges,
+      options.badgeThresholds,
+      options.minConcentrations
+    );
+    
     if (applicableBadges.length > 0) {
       const badgeIcons = applicableBadges.map(b => b.icon).join(' ');
+      
       d3.select(this).append('text')
-        .attr('x', 8)
-        .attr('y', 88)
+        .attr('class', 'node-badge')
+        .attr('x', width / 2)
+        .attr('y', height / 2)
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'central')
         .text(badgeIcons)
-        .attr('font-size', '20px')
-        .attr('fill', 'var(--color-text-white)')
+        .attr('font-size', '1rem')
+        .attr('fill', 'white')
         .style('pointer-events', 'none');
     }
   });
+
+  // Initialize content visibility at default zoom level
+  updateContentVisibility(1);
 }
