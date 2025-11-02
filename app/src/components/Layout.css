@@ -8,17 +8,17 @@
 
 .header {
   grid-column: 1 / -1;
-  color: white;
+  color: var(--color-text-white);
   padding: 1rem 2rem;
   z-index: 200;
 }
 
 .header.host {
-  background: #764ba2;
+  background: var(--color-purple);
 }
 
 .header.traveler {
-  background: #667eea;
+  background: var(--color-purple-light);
 }
 
 .header-content {
@@ -35,7 +35,7 @@
 }
 
 .persona-badge {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--color-bg-overlay-light);
   padding: 0.5rem 1rem;
   border-radius: 20px;
   font-size: 0.9rem;
@@ -48,7 +48,7 @@
 .content {
   grid-column: 2;
   padding: 2rem;
-  background: #f5f5f5;
+  background: var(--color-gray-100);
   overflow: auto;
   display: flex;
   flex-direction: column;

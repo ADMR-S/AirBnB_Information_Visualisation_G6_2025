@@ -1,3 +1,60 @@
+:root {
+  /* Purple/Blue Gradient Colors */
+  --color-purple-light: #667eea;
+  --color-purple-light-dark: #5568d3;
+  --color-purple: #764ba2;
+  --color-purple-dark: #5a4287;
+
+/* Button Action Colors */ 
+--color-action-cancel: #6C757D;
+--color-action-cancel-hover: #5a6268;
+--color-action-confirm: #28A745;
+--color-action-confirm-hover: #218838;
+--color-action-destructive: #f44336;
+--color-action-destructive-hover: #d32f2f;
+
+  /* Text Colors */
+  --color-text-primary: #222;
+  --color-text-secondary: #333;
+  --color-text-tertiary: #555;
+  --color-text-muted: #666;
+  --color-text-light: #717171;
+  --color-text-lighter: #999;
+  --color-text-white: #ffffff;
+  
+  /* Gray Scale */
+  --color-gray-100: #f7f7f7;
+  --color-gray-200: #f5f5f5;
+  --color-gray-300: #f0f0f0;
+  --color-gray-400: #e5e5e5;
+  --color-gray-500: #e0e0e0;
+  --color-gray-600: #ddd;
+  --color-gray-700: #ccc;
+  --color-gray-800: #999;
+  --color-gray-900: #888;
+  --color-gray-950: #777;
+  --color-gray-1000: #666;
+  --color-gray-1100: #555;
+  --color-gray-1200: #333;
+  --color-gray-1300: #222;
+  
+  /* Background Colors */
+  --color-bg-white: #ffffff;
+  --color-bg-light-pink: #fff5f7;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+  --color-bg-overlay-light: rgba(255, 255, 255, 0.2);
+  --color-bg-overlay-dark: rgba(0, 0, 0, 0.9);
+  
+  /* Border Colors */
+  --color-border-light: #e5e5e5;
+  --color-border-medium: #e0e0e0;
+  --color-border-dark: #ddd;
+  --color-border-darker: #ccc;
+  
+  /* Shadow Colors */
+  --color-shadow-medium: rgba(0, 0, 0, 0.2);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -14,4 +71,15 @@ body {
 
 #root {
   min-height: 100vh;
+}
+
+/* Utility Classes */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px var(--color-shadow-medium);
 }

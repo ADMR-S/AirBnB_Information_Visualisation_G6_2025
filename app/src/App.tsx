@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useData } from './hooks/useData';
+import { HostSelectionProvider } from './contexts/HostSelectionContext';
 import Landing from './pages/Landing';
 import TravelerDashboard from './pages/TravelerDashboard';
 import HostDashboard from './pages/HostDashboard';
@@ -16,27 +17,29 @@ function App() {
   useData();
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Landing />} />
+    <HostSelectionProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Landing />} />
 
-        <Route path="/traveler" element={<TravelerDashboard />}>
-          <Route index element={<Navigate to="map" replace />} />
-          <Route path="map" element={<TravelerMapView />} />
-          <Route path="prices" element={<TravelerViolinView />} />
-          <Route path="value" element={<TravelerParallelView />} />
-          <Route path="availability" element={<TravelerTreemapView />} />
-        </Route>
+          <Route path="/traveler" element={<TravelerDashboard />}>
+            <Route index element={<Navigate to="map" replace />} />
+            <Route path="map" element={<TravelerMapView />} />
+            <Route path="prices" element={<TravelerViolinView />} />
+            <Route path="value" element={<TravelerParallelView />} />
+            <Route path="availability" element={<TravelerTreemapView />} />
+          </Route>
 
-        <Route path="/host" element={<HostDashboard />}>
-          <Route index element={<Navigate to="map" replace />} />
-          <Route path="map" element={<HostMapView />} />
-          <Route path="pricing" element={<HostViolinView />} />
-          <Route path="market" element={<HostTreemapView />} />
-          <Route path="competition" element={<HostParallelView />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+          <Route path="/host" element={<HostDashboard />}>
+            <Route index element={<Navigate to="map" replace />} />
+            <Route path="map" element={<HostMapView />} />
+            <Route path="pricing" element={<HostViolinView />} />
+            <Route path="market" element={<HostTreemapView />} />
+            <Route path="competition" element={<HostParallelView />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </HostSelectionProvider>
   );
 }
 

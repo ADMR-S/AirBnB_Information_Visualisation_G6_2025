@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--color-purple-light) 0%, var(--color-purple) 100%);
 }
 
 .landing-container {
@@ -61,7 +61,7 @@
 }
 
 .persona-card.traveler button {
-  background: #667eea;
+  background: var(--color-purple-light);
   color: white;
 }
 
@@ -70,7 +70,7 @@
 }
 
 .persona-card.host button {
-  background: #764ba2;
+  background: var(--color-purple);
   color: white;
 }
 
