@@ -1,4 +1,4 @@
-// Utilities shared by parallel coordinate views
+// Utilitaires partagés 
 import * as d3 from 'd3';
 
 export function setupCanvas(canvasEl: HTMLCanvasElement, totalWidth: number, totalHeight: number) {
@@ -10,14 +10,13 @@ export function setupCanvas(canvasEl: HTMLCanvasElement, totalWidth: number, tot
   const ctx = canvasEl.getContext('2d');
   if (!ctx) return { ctx: null as CanvasRenderingContext2D | null, ratio };
   ctx.save();
-  ctx.scale(ratio, ratio);
+  ctx.scale(ratio, ratio); 
   return { ctx, ratio };
 }
 
 export function clearBackingStore(ctx: CanvasRenderingContext2D | null, canvasEl: HTMLCanvasElement | null) {
   if (!ctx || !canvasEl) return;
   ctx.save();
-  // reset transform so we clear the full backing store (pixel buffer)
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
   ctx.restore();
