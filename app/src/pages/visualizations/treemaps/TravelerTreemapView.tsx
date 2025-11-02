@@ -6,7 +6,7 @@ import type { TreemapViewConfig } from './base/TreemapViewConfig';
 
 const TRAVELER_CONFIG: TreemapViewConfig = {
   title: 'Availability Explorer',
-  description: 'Geographic distribution of listings available ({count} listings)',
+  description: 'Find how available listings are distributed across the US • {count} listings',
   badges: [EXAMPLE_BADGES.popular, EXAMPLE_BADGES.highActivity],
   finalLevel: 'room_type',
 

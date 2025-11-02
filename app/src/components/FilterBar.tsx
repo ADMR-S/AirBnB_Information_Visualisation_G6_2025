@@ -114,8 +114,8 @@ export default function FilterBar() {
 
         <div className="filter-section">
           <MultiSelect label="States" value={states} options={availableStates} onChange={(s: string) => toggleItem(states, s, setStates)} showDropdown={showStateDropdown} setShowDropdown={setShowStateDropdown} />
-          <MultiSelect label="Cities" value={cities} options={availableCities.slice(0, 20)} onChange={(c: string) => toggleItem(cities, c, setCities)} showDropdown={showCityDropdown} setShowDropdown={setShowCityDropdown} />
-          <MultiSelect label="Neighbourhoods" value={neighbourhoods} options={availableNeighbourhoods.slice(0, 50)} onChange={(n: string) => toggleItem(neighbourhoods, n, setNeighbourhoods)} showDropdown={showNeighbourhoodDropdown} setShowDropdown={setShowNeighbourhoodDropdown} />
+          <MultiSelect label="Cities" value={cities} options={availableCities} onChange={(c: string) => toggleItem(cities, c, setCities)} showDropdown={showCityDropdown} setShowDropdown={setShowCityDropdown} />
+          <MultiSelect label="Neighbourhoods" value={neighbourhoods} options={availableNeighbourhoods} onChange={(n: string) => toggleItem(neighbourhoods, n, setNeighbourhoods)} showDropdown={showNeighbourhoodDropdown} setShowDropdown={setShowNeighbourhoodDropdown} />
           <MultiSelect label="Room Types" value={roomTypes} options={availableRoomTypes} onChange={(rt: string) => toggleItem(roomTypes, rt, setRoomTypes)} showDropdown={showRoomTypeDropdown} setShowDropdown={setShowRoomTypeDropdown} />
         </div>
 
