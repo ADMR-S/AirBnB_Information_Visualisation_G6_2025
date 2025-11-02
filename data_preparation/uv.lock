@@ -131,6 +131,7 @@ dependencies = [
     { name = "ipykernel" },
     { name = "kagglehub" },
     { name = "pandas" },
+    { name = "pgeocode" },
     { name = "scipy" },
 ]
 
@@ -139,6 +140,7 @@ requires-dist = [
     { name = "ipykernel", specifier = ">=6.30.1" },
     { name = "kagglehub", specifier = ">=0.3.13" },
     { name = "pandas", specifier = ">=2.3.3" },
+    { name = "pgeocode", specifier = ">=0.5.0" },
     { name = "scipy", specifier = ">=1.16.2" },
 ]
 
@@ -441,6 +443,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl", hash = "sha256:7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523", size = 63772, upload-time = "2023-11-25T06:56:14.81Z" },
+]
+
+[[package]]
+name = "pgeocode"
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/91/27/0de1f3890a4b8c1a7ca0bd913251c1f414bf49d8d5d85482a8b95ba6c738/pgeocode-0.5.0.tar.gz", hash = "sha256:37d6caf74e9f2b1e69762811953df5b43fe7f1806833c83bf85a60dd784dff9e", size = 10473, upload-time = "2024-04-13T06:46:07.06Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/26/62/ff5ac22710794b01a6021fb681189f43e8bff224e100cb590ced4c545f7b/pgeocode-0.5.0-py3-none-any.whl", hash = "sha256:de24a5997524ef557a29a1b22443cc1bf5d02c098e0c7a8dd9ea9caf01a6a72a", size = 9772, upload-time = "2024-04-13T06:46:05.157Z" },
 ]
 
 [[package]]
