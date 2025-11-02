@@ -15,7 +15,7 @@ MAP
     Suivre la densité concurrentielle MAP + Field, 
     Voir ses propres logements et les offres alentours sur la carte MAP 
         Forme + couleur
-
+        
     afficher propriétés host dans listing
     listings superposés (afficher on long hover)
     formes
@@ -23,3 +23,4 @@ MAP
     "Show on map" button
     Bouton activation/désactivation fisheye
     enrich with more data (google maps)
+    Intermediate aggregation level (by neighborhoods with neighborhood sized-lens)
