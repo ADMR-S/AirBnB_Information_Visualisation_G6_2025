@@ -274,3 +274,141 @@ export async function renderBaseMap(
     console.error('Error loading map:', error);
   }
 }
+
+/**
+ * Renders the size legend showing the relationship between circle size and number of listings
+ * @param svg D3 selection of the SVG element
+ * @param width Width of the SVG
+ * @param height Height of the SVG
+ * @param maxValue Maximum value for scaling
+ * @param sizeRange Tuple of [min, max] bubble radius sizes
+ */
+export function renderSizeLegend(
+  svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
+  width: number,
+  height: number,
+  maxValue: number,
+  sizeRange: [number, number] = MAP_CONFIG.bubbles.neighborhoodSizeRange
+) {
+  // Remove existing size legend
+  svg.selectAll('.size-legend').remove();
+  
+  // Create radius scale
+  const radiusScale = createRadiusScale(maxValue, sizeRange);
+  
+  // Define legend values (proportional to max value)
+  const legendValues = [
+    Math.round(maxValue * 0.25),
+    Math.round(maxValue * 0.5),
+    maxValue
+  ];
+  
+  // Create legend group - fixed position, not affected by zoom
+  const legend = svg.append("g")
+    .attr("class", "size-legend")
+    .attr("transform", `translate(${width - 120}, ${height - 40})`);
+  
+  // Add title
+  legend.append("text")
+    .attr("x", -30)
+    .attr("y", -55)
+    .attr("font-size", "12px")
+    .attr("font-weight", "bold")
+    .attr("fill", "#333")
+    .style("text-shadow", "1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white")
+    .text("Number of listings");
+  
+  // Create circles for each value
+  const circles = legend.selectAll("g.legend-circle")
+    .data(legendValues)
+    .enter().append("g")
+    .attr("class", "legend-circle");
+  
+  circles.append("circle")
+    .attr("cy", d => -radiusScale(d))
+    .attr("r", d => radiusScale(d))
+    .attr("fill", "none")
+    .attr("stroke", "#333")
+    .attr("stroke-width", 1.5);
+  
+  circles.append("text")
+    .attr("y", d => -2 * radiusScale(d))
+    .attr("dy", "1.3em")
+    .attr("x", d => radiusScale(d) + 18)
+    .attr("font-size", "11px")
+    .attr("font-weight", "bold")
+    .attr("fill", "#333")
+    .style("text-shadow", "1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white")
+    .text(d => d3.format(",")(d));
+}
+
+/**
+ * Renders the color legend showing the relationship between color and price
+ * @param svg D3 selection of the SVG element
+ * @param width Width of the SVG
+ * @param height Height of the SVG
+ * @param minPrice Minimum price value
+ * @param maxPrice Maximum price value
+ */
+export function renderColorLegend(
+  svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
+  width: number,
+  height: number,
+  minPrice: number,
+  maxPrice: number
+) {
+  // Remove existing color legend
+  svg.selectAll('.color-legend').remove();
+  
+  // Create color scale (same as used for bubbles: high price = red, low price = green)
+  const colorScale = d3.scaleSequential(d3.interpolateRdYlGn)
+    .domain([maxPrice, minPrice]);
+  
+  // Create legend group - fixed position, not affected by zoom
+  // Position it above the size legend (which is at height - 80)
+  const legend = svg.append("g")
+    .attr("class", "color-legend")
+    .attr("transform", `translate(${width - 150}, ${height - 200})`);
+  
+  // Add title
+  legend.append("text")
+    .attr("x", 0)
+    .attr("y", 0)
+    .attr("font-size", "12px")
+    .attr("font-weight", "bold")
+    .attr("fill", "#333")
+    .style("text-shadow", "1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white")
+    .text("Average price");
+  
+  const circleRadius = 8;
+  const circleSpacing = 30;
+  
+  // Data for the two circles
+  const priceData = [
+    { price: minPrice, label: "Less expensive", y: 25 },
+    { price: maxPrice, label: "Most expensive", y: 25 + circleSpacing }
+  ];
+  
+  // Create circles and labels
+  priceData.forEach(item => {
+    // Draw circle
+    legend.append("circle")
+      .attr("cx", 10)
+      .attr("cy", item.y)
+      .attr("r", circleRadius)
+      .attr("fill", colorScale(item.price) as string)
+      .attr("stroke", "#333")
+      .attr("stroke-width", 1.5);
+    
+    // Add label text with price in parentheses
+    legend.append("text")
+      .attr("x", 10 + circleRadius + 8)
+      .attr("y", item.y)
+      .attr("dy", "0.35em")
+      .attr("font-size", "11px")
+      .attr("font-weight", "bold")
+      .attr("fill", "#333")
+      .style("text-shadow", "1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white")
+      .text(`${item.label} ($${Math.round(item.price)})`);
+  });
+}
