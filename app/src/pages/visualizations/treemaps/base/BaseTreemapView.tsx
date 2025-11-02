@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { useFilterStore } from '../../../../stores/useFilterStore';
 import { useFilteredData } from '../../../../hooks/useFilteredData';
-import { calculatePercentileFromThreshold, type BadgeConfig } from './visualBadges';
+import type { BadgeConfig } from './visualBadges';
 import { aggregateListings, renderTreemapSVG } from './treemapHelpers';
 import { TREEMAP_CONFIG, createTreemapLayout, prepareHierarchy } from './treemapConfig';
 import { useTreemapNavigation } from './useTreemapNavigation';
@@ -23,12 +23,14 @@ export default function BaseTreemapView({ config }: BaseTreemapViewProps) {
   const [badgeThresholds, setBadgeThresholds] = useState<Map<string, number>>(
     new Map(config.badges.map(b => [b.label, b.defaultThreshold]))
   );
-  const [minConcentration, setMinConcentration] = useState(8);
+  const [minConcentrations, setMinConcentrations] = useState<Map<string, number>>(
+    new Map(config.badges.map(b => [b.label, 8]))
+  );
 
   useEffect(() => {
     if (isLoading || filteredData.length === 0) return;
     renderTreemap();
-  }, [filteredData, isLoading, badgeThresholds, minConcentration, currentLevel]);
+  }, [filteredData, isLoading, badgeThresholds, minConcentrations, currentLevel]);
 
   const createThresholdMap = () => {
     const thresholdMap = new Map<BadgeConfig, number>();
@@ -36,6 +38,14 @@ export default function BaseTreemapView({ config }: BaseTreemapViewProps) {
       thresholdMap.set(badge, badgeThresholds.get(badge.label) ?? badge.defaultThreshold);
     });
     return thresholdMap;
+  };
+
+  const createConcentrationMap = () => {
+    const concentrationMap = new Map<BadgeConfig, number>();
+    config.badges.forEach(badge => {
+      concentrationMap.set(badge, minConcentrations.get(badge.label) ?? 8);
+    });
+    return concentrationMap;
   };
 
   const renderTreemap = () => {
@@ -59,7 +69,7 @@ export default function BaseTreemapView({ config }: BaseTreemapViewProps) {
       tooltipFn: (d) => config.getTooltipContent(d.data),
       badges: config.badges,
       badgeThresholds: createThresholdMap(),
-      minConcentration,
+      minConcentrations: createConcentrationMap(),
       onDrillDown: handleClick,
       finalLevel: config.finalLevel,
     });
@@ -101,14 +111,13 @@ export default function BaseTreemapView({ config }: BaseTreemapViewProps) {
             <div className="badge-legend">
               {config.badges.map((badge, i) => {
                 const threshold = badgeThresholds.get(badge.label) ?? badge.defaultThreshold;
-                const percentile = calculatePercentileFromThreshold(filteredData, badge, threshold);
-                const topPercent = 100 - percentile;
+                const concentration = minConcentrations.get(badge.label) ?? 8;
                 return (
                   <div key={i} className="badge-control-group">
                     <div className="badge-item">
                       <span className="badge-icon">{badge.icon}</span>
                       <span className="badge-label">
-                        {badge.label}: {badge.unit}{Math.round(threshold)}+ (top {topPercent}%)
+                        {badge.label}: {badge.unit}{Math.round(threshold)}+
                       </span>
                     </div>
                     <div className="badge-slider-wrapper">
@@ -120,11 +129,14 @@ export default function BaseTreemapView({ config }: BaseTreemapViewProps) {
                         onChange={(e) => setBadgeThresholds(new Map(badgeThresholds).set(badge.label, parseInt(e.target.value)))}
                         className="percentile-slider" />
                     </div>
-                    <div className="badge-slider-wrapper">
-                      <label className="slider-label">Min Concentration: {minConcentration}%</label>
-                      <input type="range" min="3" max="20" step="1" value={minConcentration}
-                        onChange={(e) => setMinConcentration(parseInt(e.target.value))} className="percentile-slider" />
-                    </div>
+                    {badge.label !== 'High Activity' && (
+                      <div className="badge-slider-wrapper">
+                        <label className="slider-label">Min Concentration: {concentration}%</label>
+                        <input type="range" min="3" max="100" step="1" value={concentration}
+                          onChange={(e) => setMinConcentrations(new Map(minConcentrations).set(badge.label, parseInt(e.target.value)))}
+                          className="percentile-slider" />
+                      </div>
+                    )}
                   </div>
                 );
               })}

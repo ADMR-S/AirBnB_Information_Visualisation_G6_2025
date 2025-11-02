@@ -12,6 +12,7 @@ export interface TreemapNode {
   avgAvailability?: number;
   totalListings?: number;
   avgReviews?: number;
+  avgReviewsPerMonth?: number;
   parentState?: string;
   listings?: AirbnbListing[];
   children?: TreemapNode[];
@@ -24,6 +25,7 @@ export function aggregateListings(listings: AirbnbListing[]) {
     avgPrice: d3.mean(listings, d => d.price) || 0,
     avgAvailability: d3.mean(listings, d => d.availability_365) || 0,
     avgReviews: d3.mean(listings, d => d.number_of_reviews) || 0,
+    avgReviewsPerMonth: d3.mean(listings, d => d.reviews_per_month) || 0,
     listings,
   };
 }
@@ -71,7 +73,7 @@ export function renderTreemapSVG(
     tooltipFn: (d: any) => string;
     badges?: BadgeConfig[];
     badgeThresholds?: Map<BadgeConfig, number>;
-    minConcentration?: number; // Minimum % of exceptional listings to show badge
+    minConcentrations?: Map<BadgeConfig, number>; // Minimum % of exceptional listings to show badge (per badge)
     onDrillDown: (data: any) => void;
     finalLevel: string;
   }
@@ -122,38 +124,46 @@ export function renderTreemapSVG(
     true
   );
 
-  // Add listing count with inline badge icons
+  // Add listing count and badge icons
   nodes.each(function(d: any) {
     const width = d.x1 - d.x0;
     
     // Skip text if rectangle too narrow
     if (width < TREEMAP_CONFIG.minWidthForListingCount) return;
 
+    // Render the listing count text
+    d3.select(this).append('text')
+      .attr('x', 8)
+      .attr('y', 55)
+      .text(`${d.data.totalListings} listings`)
+      .attr('font-size', '18px')
+      .attr('fill', 'var(--color-text-white)')
+      .style('pointer-events', 'none');
+
     // Get applicable badges based on listing concentration
     let applicableBadges: BadgeConfig[] = [];
-    if (options.badges && options.badgeThresholds) {
+    if (options.badges && options.badgeThresholds && options.minConcentrations) {
       const nodeListings = d.data.listings;
       if (nodeListings && Array.isArray(nodeListings) && nodeListings.length > 0) {
         applicableBadges = getApplicableBadgesByConcentration(
           nodeListings,
           options.badges,
           options.badgeThresholds,
-          options.minConcentration ?? 15
+          options.minConcentrations
         );
       }
     }
-    const badgeIcons = applicableBadges.map(b => b.icon).join(' ');
     
-    // Build text: "X listings 🔥 ⭐"
-    const text = `${d.data.totalListings} listings${badgeIcons ? ' ' + badgeIcons : ''}`;
-
-    // Render the text element
-    d3.select(this).append('text')
-      .attr('x', 8)
-      .attr('y', 55)
-      .text(text)
-      .attr('font-size', '18px')
-      .attr('fill', 'var(--color-text-white)')
-      .style('pointer-events', 'none');
+    // Render badge icons on a separate line below
+    if (applicableBadges.length > 0) {
+      const badgeIcons = applicableBadges.map(b => b.icon).join(' ');
+      d3.select(this).append('text')
+        .attr('x', 8)
+        .attr('y', 88)
+        .text(badgeIcons)
+        .attr('font-size', '20px')
+        .attr('fill', 'var(--color-text-white)')
+        .style('pointer-events', 'none');
+    }
   });
 }

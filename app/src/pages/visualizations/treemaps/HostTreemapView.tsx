@@ -7,7 +7,7 @@ import type { TreemapViewConfig } from './base/TreemapViewConfig';
 const HOST_CONFIG: TreemapViewConfig = {
   title: 'Market Structure Analysis',
   description: 'Geographic distribution of your properties ({count} listings)',
-  badges: [EXAMPLE_BADGES.popular],
+  badges: [EXAMPLE_BADGES.popular, EXAMPLE_BADGES.highActivity],
   finalLevel: 'room_type',
 
   buildHierarchy: (filteredData, currentLevel, aggregate) => {

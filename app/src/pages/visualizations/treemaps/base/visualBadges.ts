@@ -27,14 +27,14 @@ export const EXAMPLE_BADGES = {
     maxThreshold: 500,
     unit: '',
   },
-  highAvailability: {
-    icon: '✓',
-    label: 'Available',
-    metric: (d: any) => d.avgAvailability || d.availability_365 || 0,
-    defaultThreshold: 200,
-    minThreshold: 30,
-    maxThreshold: 365,
-    unit: 'd',
+  highActivity: {
+    icon: '🔥',
+    label: 'High Activity',
+    metric: (d: any) => d.avgReviewsPerMonth || d.reviews_per_month || 0,
+    defaultThreshold: 20,
+    minThreshold: 0.5,
+    maxThreshold: 50,
+    unit: '/mo',
   },
 } as const;
 
@@ -75,10 +75,19 @@ export function getApplicableBadgesByConcentration(
   nodeListings: any[],
   badges: readonly BadgeConfig[],
   thresholds: Map<BadgeConfig, number>,
-  minConcentration: number = 15
+  minConcentrations: Map<BadgeConfig, number>
 ): BadgeConfig[] {
   return badges.filter(badge => {
     const threshold = thresholds.get(badge) ?? badge.defaultThreshold;
+    
+    // For High Activity badge, just check if ANY listings meet the threshold
+    if (badge.label === 'High Activity') {
+      const concentration = calculateConcentration(nodeListings, badge, threshold);
+      return concentration > 0;
+    }
+    
+    // For other badges, use the concentration check
+    const minConcentration = minConcentrations.get(badge) ?? 15;
     const concentration = calculateConcentration(nodeListings, badge, threshold);
     return concentration >= minConcentration;
   });
