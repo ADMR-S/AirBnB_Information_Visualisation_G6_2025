@@ -310,13 +310,13 @@ export function renderSizeLegend(
   
   // Add title
   legend.append("text")
-    .attr("x", 0)
+    .attr("x", -30)
     .attr("y", -55)
     .attr("font-size", "12px")
     .attr("font-weight", "bold")
     .attr("fill", "#333")
     .style("text-shadow", "1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white")
-    .text("Nombre de listings");
+    .text("Number of listings");
   
   // Create circles for each value
   const circles = legend.selectAll("g.legend-circle")
@@ -334,7 +334,7 @@ export function renderSizeLegend(
   circles.append("text")
     .attr("y", d => -2 * radiusScale(d))
     .attr("dy", "1.3em")
-    .attr("x", d => radiusScale(d) + 8)
+    .attr("x", d => radiusScale(d) + 18)
     .attr("font-size", "11px")
     .attr("font-weight", "bold")
     .attr("fill", "#333")
@@ -378,7 +378,7 @@ export function renderColorLegend(
     .attr("font-weight", "bold")
     .attr("fill", "#333")
     .style("text-shadow", "1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white")
-    .text("Prix moyen");
+    .text("Average price");
   
   const circleRadius = 8;
   const circleSpacing = 30;
