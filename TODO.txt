@@ -22,5 +22,16 @@ MAP
 
     Show hull of selected data on the map as a whole per city ?
 
-    Double contour sélection
+    listings superposés (afficher on long hover)
 
+    afficher détail listing sous la carte
+    pop up ne se ferme pas en changeant d'écran
+
+    Interactions vers autres vues
+
+    Couleurs champs neighborhood, bulles et city
+    formes
+    Add to favorites (stars)
+
+    légende
+    personnaliser host/user
