@@ -4,7 +4,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { useFilterStore } from '../../../stores/useFilterStore';
 import { useFilteredData } from '../../../hooks/useFilteredData';
-import type { AirbnbListing } from '../../../types/airbnb.types';
 import '../VisualizationPage.css';
 
 export default function HostViolinView() {
