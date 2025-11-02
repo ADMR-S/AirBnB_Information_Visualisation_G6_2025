@@ -245,6 +245,73 @@ export function updateSelectedListing(
 }
 
 /**
+ * Renders host properties as green triangles (non-fisheye view)
+ * @param container D3 selection of the container element
+ * @param listings Array of all listings
+ * @param hostListings Array of host's listings
+ * @param projection D3 geo projection
+ * @param zoomLevel Current zoom level
+ */
+export function renderHostProperties(
+  container: d3.Selection<SVGGElement, unknown, null, undefined>,
+  listings: AirbnbListing[],
+  hostListings: AirbnbListing[],
+  projection: d3.GeoProjection,
+  zoomLevel: number
+): void {
+  // Remove existing host property markers
+  container.selectAll('.host-property').remove();
+  
+  if (hostListings.length === 0) return;
+  
+  // Calculate triangle size based on zoom level (similar to listing bubbles)
+  const baseBubbleRadius = MAP_CONFIG.fisheye.listingBubbleRadius;
+  let triangleSize = baseBubbleRadius / Math.sqrt(zoomLevel);
+  
+  // Make the triangle bigger: 3x at neighborhood level, 10x at city level
+  if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
+    // At city level, make it 10x larger to stand out more
+    triangleSize = triangleSize * 10;
+  } else {
+    // At neighborhood level, make it 3x larger for better visibility
+    triangleSize = triangleSize * 3;
+  }
+  
+  const triangleStrokeWidth = 0.02;
+  
+  // Get or create fisheye group (reuse same group for consistency)
+  let fisheyeGroup = container.select<SVGGElement>('g.fisheye-listings-group');
+  if (fisheyeGroup.empty()) {
+    fisheyeGroup = container.append('g').attr('class', 'fisheye-listings-group');
+  }
+  
+  // Raise the group to ensure it's on top
+  fisheyeGroup.raise();
+  
+  // Create triangle path generator
+  const trianglePath = (size: number) => {
+    const height = size * Math.sqrt(3) / 2;
+    return `M 0,${-height * 0.67} L ${size / 2},${height * 0.33} L ${-size / 2},${height * 0.33} Z`;
+  };
+  
+  // Render host properties as triangles
+  hostListings.forEach(listing => {
+    const projected = projection([listing.longitude, listing.latitude]);
+    if (!projected) return;
+    
+    fisheyeGroup.append('path')
+      .attr('class', 'host-property')
+      .attr('d', trianglePath(triangleSize))
+      .attr('transform', `translate(${projected[0]}, ${projected[1]})`)
+      .attr('fill', '#4CAF50')
+      .attr('fill-opacity', 0.9)
+      .attr('stroke', '#fff')
+      .attr('stroke-width', triangleStrokeWidth)
+      .style('pointer-events', 'none');
+  });
+}
+
+/**
  * Renders individual listing bubbles within fisheye lens
  * @param container D3 selection of the container element
  * @param listings Array of listings to render
@@ -253,6 +320,7 @@ export function updateSelectedListing(
  * @param zoomLevel Current zoom level
  * @param onSelect Callback when a listing is selected or cleared
  * @param injectedSelectedListing Optional selected listing from context (when no popup exists)
+ * @param hostListings Optional array of host's listings to render as green triangles
  */
 export function renderFisheyeListings(
   container: d3.Selection<SVGGElement, unknown, null, undefined>,
@@ -261,14 +329,16 @@ export function renderFisheyeListings(
   fisheyeFocus: [number, number],
   zoomLevel: number,
   onSelect?: (listing: AirbnbListing | null) => void,
-  injectedSelectedListing?: AirbnbListing | null
+  injectedSelectedListing?: AirbnbListing | null,
+  hostListings?: AirbnbListing[]
 ): void {
   // Get currently selected listing ID from popup, or from injected listing
   const selectedListingId = getSelectedListingId() || injectedSelectedListing?.id || null;
   
-  // Remove existing non-selected fisheye listings
+  // Remove existing non-selected fisheye listings and host properties
   container.selectAll('.fisheye-listing:not(.selected-listing)').remove();
   container.selectAll('.fisheye-lens-circle').remove();
+  container.selectAll('.host-property').remove();
   
   const fisheyeRadius = getFisheyeRadius(zoomLevel);
   const fisheyeStrokeWidth = getFisheyeStrokeWidth(zoomLevel);
@@ -435,6 +505,68 @@ export function renderFisheyeListings(
           .attr('r', listingBubbleRadius);
       }
     }
+  }
+  
+  // Render host properties as green triangles with fisheye distortion
+  if (hostListings && hostListings.length > 0) {
+    // Triangle size: 3x base size at neighborhood level, 10x at city level
+    let triangleSize = listingBubbleRadius * 3;
+    if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
+      triangleSize = listingBubbleRadius * 10;
+    }
+    const triangleStrokeWidth = 0.02;
+    
+    // Create triangle path generator
+    const trianglePath = (size: number) => {
+      const height = size * Math.sqrt(3) / 2;
+      return `M 0,${-height * 0.67} L ${size / 2},${height * 0.33} L ${-size / 2},${height * 0.33} Z`;
+    };
+    
+    // Project all host listings and separate inside/outside fisheye radius
+    type ProjectedHostListing = { listing: AirbnbListing; projected: [number, number]; distance: number };
+    const allProjectedHostListings: ProjectedHostListing[] = hostListings
+      .map(listing => {
+        const projected = projection([listing.longitude, listing.latitude]);
+        if (!projected) return null;
+        
+        const dx = projected[0] - fisheyeFocus[0];
+        const dy = projected[1] - fisheyeFocus[1];
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        return { listing, projected, distance };
+      })
+      .filter((d): d is ProjectedHostListing => d !== null);
+    
+    const insideFisheye = allProjectedHostListings.filter(d => d.distance <= fisheyeRadius);
+    const outsideFisheye = allProjectedHostListings.filter(d => d.distance > fisheyeRadius);
+    
+    // Render host properties inside fisheye with distortion
+    insideFisheye.forEach(d => {
+      const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
+      
+      fisheyeGroup.append('path')
+        .attr('class', 'host-property fisheye-host-property')
+        .attr('d', trianglePath(triangleSize))
+        .attr('transform', `translate(${distorted.x}, ${distorted.y})`)
+        .attr('fill', '#4CAF50')
+        .attr('fill-opacity', 0.9)
+        .attr('stroke', '#fff')
+        .attr('stroke-width', triangleStrokeWidth)
+        .style('pointer-events', 'none');
+    });
+    
+    // Render host properties outside fisheye at normal position (no distortion)
+    outsideFisheye.forEach(d => {
+      fisheyeGroup.append('path')
+        .attr('class', 'host-property')
+        .attr('d', trianglePath(triangleSize))
+        .attr('transform', `translate(${d.projected[0]}, ${d.projected[1]})`)
+        .attr('fill', '#4CAF50')
+        .attr('fill-opacity', 0.9)
+        .attr('stroke', '#fff')
+        .attr('stroke-width', triangleStrokeWidth)
+        .style('pointer-events', 'none');
+    });
   }
 }
 

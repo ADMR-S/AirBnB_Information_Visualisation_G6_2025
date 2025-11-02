@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import * as d3 from 'd3';
 import type { AirbnbListing, Persona } from '../../../types/airbnb.types';
 import { useAggregatedData } from "../../../hooks/useAggregatedData";
 import { useSelectedListing } from '../../../contexts/SelectedListingContext';
+import { useHostSelection } from '../../../contexts/HostSelectionContext';
+import { useFilterStore } from '../../../stores/useFilterStore';
 import { createProjection, createNullProjectionPath } from './mapUtils';
 import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap } from './mapRenderers';
-import { renderFisheyeListings, applyFisheyeToBasemap, restoreBasemapPaths, getFisheyeRadius, updateSelectedListing } from './fisheyeUtils';
+import { renderFisheyeListings, applyFisheyeToBasemap, restoreBasemapPaths, getFisheyeRadius, updateSelectedListing, renderHostProperties } from './fisheyeUtils';
 import { MAP_CONFIG } from './mapConfig';
 import ListingDetails from '../../../components/ListingDetails';
 import '../VisualizationPage.css';
@@ -19,6 +21,8 @@ interface BubbleMapProps {
 }
 
 export default function BubbleMap({ filteredData, persona, isLoading, injectedListing }: BubbleMapProps) {
+  // Get allData for host properties (so they're always visible regardless of filters)
+  const { allData } = useFilterStore();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const maxCityCountRef = useRef<number>(0);
@@ -36,6 +40,20 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
   const { selectedListing, setSelectedListing } = useSelectedListing();
   const selectedListingRef = useRef<AirbnbListing | null>(null);
   const setSelectedListingRef = useRef<(listing: AirbnbListing | null) => void>(setSelectedListing);
+  
+  // Get host selection context (for host persona only)
+  const { selectedHost } = useHostSelection();
+  
+  // Filter host's listings from allData (not filteredData) so they're always visible
+  const hostListings = useMemo(() => {
+    if (persona !== 'host' || !selectedHost || !allData.length) {
+      return [];
+    }
+    
+    // Use allData instead of filteredData so host properties are always visible
+    const listings = allData.filter(listing => String(listing.host_id) === String(selectedHost.hostId));
+    return listings;
+  }, [persona, selectedHost, allData]);
   
   // Keep refs in sync with context
   useEffect(() => {
@@ -130,6 +148,10 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
         // Show selected listing AFTER city bubbles so it appears on top
         updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
+        // Show host properties as green triangles (for host persona)
+        if (hostListings.length > 0) {
+          renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+        }
       } else {
         if (MAP_CONFIG.DEBUG_LOG) {
           console.log(`[BubbleMap] Rendering NEIGHBORHOOD fields (zoom >= ${MAP_CONFIG.zoom.cityThreshold})`);
@@ -138,6 +160,10 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         makeCityBoundaries(g, projection, cityBoundaries);
         // Then show neighborhoods as fields
         makeNeighborhoodFields(g, projection, neighborhoodFields);
+        // Show host properties as green triangles (for host persona)
+        if (hostListings.length > 0) {
+          renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+        }
       }
     }
 
@@ -188,7 +214,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           
           // Re-render fisheye listings with updated zoom
           g.selectAll('.fisheye-listings-group').remove();
-          renderFisheyeListings(g, filteredData, projection, fisheyePosition, zoomLevel, setSelectedListingRef.current, selectedListingRef.current);
+          renderFisheyeListings(g, filteredData, projection, fisheyePosition, zoomLevel, setSelectedListingRef.current, selectedListingRef.current, hostListings);
         }
       });
 
@@ -216,8 +242,8 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           // Apply fisheye distortion to base map
           applyFisheyeToBasemap(g, [mouseX, mouseY], fisheyeRadius, originalPathsRef.current);
           
-          // Render fisheye listings (this will handle the selected listing too)
-          renderFisheyeListings(g, filteredData, projection, [mouseX, mouseY], currentZoomRef.current, setSelectedListingRef.current, selectedListingRef.current);
+          // Render fisheye listings (this will handle the selected listing and host properties too)
+          renderFisheyeListings(g, filteredData, projection, [mouseX, mouseY], currentZoomRef.current, setSelectedListingRef.current, selectedListingRef.current, hostListings);
         } else {
           setFisheyeActive(false);
           restoreBasemapPaths(g, originalPathsRef.current);
@@ -238,6 +264,10 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         const zoomLevel = currentZoomRef.current;
         if (zoomLevel >= MAP_CONFIG.zoom.cityThreshold) {
           updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
+          // Re-render host properties after fisheye deactivation
+          if (hostListings.length > 0) {
+            renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+          }
         }
       });
     }
@@ -317,12 +347,20 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
         // Show selected listing AFTER city bubbles so it appears on top
         updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
+        // Show host properties as green triangles (for host persona)
+        if (hostListings.length > 0) {
+          renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+        }
       } else {
         if (MAP_CONFIG.DEBUG_LOG) {
           console.log(`[BubbleMap] Rendering NEIGHBORHOOD fields (zoom >= ${MAP_CONFIG.zoom.cityThreshold})`);
         }
         makeCityBoundaries(g, projection, cityBoundaries);
         makeNeighborhoodFields(g, projection, neighborhoodFields);
+        // Show host properties as green triangles (for host persona)
+        if (hostListings.length > 0) {
+          renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+        }
       }
     }
 
@@ -335,7 +373,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
       const svg = d3.select(svgRef.current);
       svg.call(zoomBehaviorRef.current.transform, currentTransformRef.current);
     }
-  }, [filteredData, cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount]);
+  }, [filteredData, cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount, hostListings]);
 
   function handleZoomIn() {
     if (!svgRef.current || !zoomBehaviorRef.current) return;
