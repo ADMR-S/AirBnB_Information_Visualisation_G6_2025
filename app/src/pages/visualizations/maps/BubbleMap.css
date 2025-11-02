@@ -102,10 +102,15 @@
 }
 
 .fisheye-listing.selected-listing {
-  fill: #FF5722 !important;
+  fill: #D946EF !important;
   fill-opacity: 0.9 !important;
-  stroke: #000 !important;
-  stroke-width: 0.1 !important;
+  stroke: #fff !important;
+  stroke-width: 0.02 !important;
+  pointer-events: none;
+}
+
+.selected-listing-center {
+  fill: #000 !important;
   pointer-events: none;
 }
 

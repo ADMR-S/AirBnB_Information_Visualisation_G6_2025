@@ -193,8 +193,9 @@ export function updateSelectedListing(
   }
   
   if (!selectedListing) {
-    // No selection, remove any selected listing bubble
+    // No selection, remove any selected listing bubble and center circle
     container.selectAll('.selected-listing').remove();
+    container.selectAll('.selected-listing-center').remove();
     return;
   }
   
@@ -202,6 +203,7 @@ export function updateSelectedListing(
   const projected = projection([selectedListing.longitude, selectedListing.latitude]);
   if (!projected) {
     container.selectAll('.selected-listing').remove();
+    container.selectAll('.selected-listing-center').remove();
     return;
   }
   
@@ -230,10 +232,6 @@ export function updateSelectedListing(
   if (selectedBubble.empty()) {
     selectedBubble = fisheyeGroup.append('circle')
       .attr('class', 'fisheye-listing selected-listing')
-      .attr('fill', '#FF5722')
-      .attr('fill-opacity', 0.9)
-      .attr('stroke', '#000')
-      .attr('stroke-width', 0.1)
       .style('cursor', 'pointer')
       .style('pointer-events', 'none');
   }
@@ -241,7 +239,25 @@ export function updateSelectedListing(
   selectedBubble
     .attr('cx', projected[0])
     .attr('cy', projected[1])
-    .attr('r', listingBubbleRadius);
+    .attr('r', listingBubbleRadius)
+    .attr('fill', '#e803dc')
+    .attr('fill-opacity', 0.9)
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 0.02);
+  
+  // Add a small black circle in the center (about 25% of the size)
+  let centerCircle = fisheyeGroup.select<SVGCircleElement>('.selected-listing-center');
+  if (centerCircle.empty()) {
+    centerCircle = fisheyeGroup.append('circle')
+      .attr('class', 'selected-listing-center')
+      .attr('fill', '#000')
+      .style('pointer-events', 'none');
+  }
+  
+  centerCircle
+    .attr('cx', projected[0])
+    .attr('cy', projected[1])
+    .attr('r', listingBubbleRadius * 0.25);
 }
 
 /**
@@ -326,10 +342,19 @@ function createSelectedListingCircle(
     .attr('cx', x)
     .attr('cy', y)
     .attr('r', radius)
-    .attr('fill', '#FF5722')
+    .attr('fill', '#e803dc')
     .attr('fill-opacity', 0.9)
-    .attr('stroke', '#000')
-    .attr('stroke-width', strokeWidth)
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 0.02)
+    .style('pointer-events', 'none');
+  
+  // Add a small black circle in the center (about 25% of the size)
+  group.append('circle')
+    .attr('class', 'selected-listing-center')
+    .attr('cx', x)
+    .attr('cy', y)
+    .attr('r', radius * 0.25)
+    .attr('fill', '#000')
     .style('pointer-events', 'none');
 }
 
@@ -446,8 +471,9 @@ export function renderFisheyeListings(
         onSelect
       );
       
-      // Remove old selected listing and create new one
+      // Remove old selected listing and center circle and create new one
       fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing').remove();
+      fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing-center').remove();
       
       // Hide the clicked bubble by making it invisible
       d3.select(this).style('opacity', 0);
@@ -458,7 +484,7 @@ export function renderFisheyeListings(
     })
     .on('mouseover', function(this: SVGCircleElement) {
       d3.select(this)
-        .attr('fill', '#FF5722')
+        .attr('fill', '#e803dc')
         .attr('r', listingBubbleRadius * 1.5);
     })
     .on('mouseout', function(this: SVGCircleElement) {
@@ -478,8 +504,9 @@ export function renderFisheyeListings(
       fisheyeRadius
     );
     
-    // Remove any existing selected listing
+    // Remove any existing selected listing and center circle
     fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing').remove();
+    fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing-center').remove();
     
     // Create selected listing bubble with fisheye distortion
     createSelectedListingCircle(fisheyeGroup, distorted.x, distorted.y, listingBubbleRadius, fisheyeStrokeWidth);
@@ -495,10 +522,6 @@ export function renderFisheyeListings(
         if (selectedBubble.empty()) {
           selectedBubble = fisheyeGroup.append('circle')
             .attr('class', 'fisheye-listing selected-listing')
-            .attr('fill', '#FF5722')
-            .attr('fill-opacity', 0.9)
-            .attr('stroke', '#000')
-            .attr('stroke-width', 0.1)
             .style('pointer-events', 'none');
         }
         
@@ -506,7 +529,25 @@ export function renderFisheyeListings(
         selectedBubble
           .attr('cx', projected[0])
           .attr('cy', projected[1])
-          .attr('r', listingBubbleRadius);
+          .attr('r', listingBubbleRadius)
+          .attr('fill', '#e803dc')
+          .attr('fill-opacity', 0.9)
+          .attr('stroke', '#fff')
+          .attr('stroke-width', 0.02);
+        
+        // Add a small black circle in the center (about 25% of the size)
+        let centerCircle = fisheyeGroup.select<SVGCircleElement>('.selected-listing-center');
+        if (centerCircle.empty()) {
+          centerCircle = fisheyeGroup.append('circle')
+            .attr('class', 'selected-listing-center')
+            .attr('fill', '#000')
+            .style('pointer-events', 'none');
+        }
+        
+        centerCircle
+          .attr('cx', projected[0])
+          .attr('cy', projected[1])
+          .attr('r', listingBubbleRadius * 0.25);
       }
     }
   }

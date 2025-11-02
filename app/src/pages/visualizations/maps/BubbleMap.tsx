@@ -82,8 +82,9 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
     if (selectedListing && !fisheyeActive) {
       updateSelectedListing(gRef.current, filteredData, projectionRef.current, zoomLevel, selectedListing);
     } else if (!selectedListing) {
-      // No selection - remove the selected listing pin
+      // No selection - remove the selected listing pin and center circle
       gRef.current.selectAll('.selected-listing').remove();
+      gRef.current.selectAll('.selected-listing-center').remove();
     }
   }, [selectedListing, fisheyeActive, filteredData]); // Depend on fisheyeActive too
 
@@ -434,9 +435,10 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
             if (popup) {
               popup.remove();
             }
-            // Remove selected listing visualization
+            // Remove selected listing visualization and center circle
             if (gRef.current) {
               gRef.current.selectAll('.selected-listing').remove();
+              gRef.current.selectAll('.selected-listing-center').remove();
             }
           }}
         />
