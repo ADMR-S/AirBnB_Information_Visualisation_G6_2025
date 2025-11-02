@@ -15,7 +15,32 @@ export default function TravelerParallelView() {
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const selectionCanvasRef = useRef<HTMLCanvasElement | null>(null); // Separate canvas for selection
   const [renderAll, setRenderAll] = useState(false);
+  const [useAggregation, setUseAggregation] = useState(false);
+  
+  // Tri du tableau
+  const [sortColumn, setSortColumn] = useState<keyof AirbnbListing | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
+  
+  // Ligne sélectionnée depuis le tableau
+  const [selectedListing, setSelectedListing] = useState<AirbnbListing | null>(null);
+
+  // Handle column sort - cycle through null -> asc -> desc -> null
+  const handleSort = (column: keyof AirbnbListing) => {
+    if (sortColumn !== column) {
+      // New column - start with ascending
+      setSortColumn(column);
+      setSortDirection('asc');
+    } else if (sortDirection === 'asc') {
+      // Same column, was ascending - switch to descending
+      setSortDirection('desc');
+    } else if (sortDirection === 'desc') {
+      // Same column, was descending - reset to neutral
+      setSortColumn(null);
+      setSortDirection(null);
+    }
+  };
 
   const dimensions: { key: keyof AirbnbListing; label: string }[] = [
     { key: 'price', label: 'Price' },
@@ -31,6 +56,35 @@ export default function TravelerParallelView() {
     [filteredData]
   );
 
+  // Sort and limit data for table display (top 100 rows)
+  const sortedTableData = useMemo(() => {
+    let data = [...filteredData];
+    
+    if (sortColumn && sortDirection) {
+      data.sort((a, b) => {
+        const aVal = a[sortColumn];
+        const bVal = b[sortColumn];
+        
+        // Handle null/undefined values
+        if (aVal == null && bVal == null) return 0;
+        if (aVal == null) return 1;
+        if (bVal == null) return -1;
+        
+        // Compare values
+        let comparison = 0;
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          comparison = aVal - bVal;
+        } else {
+          comparison = String(aVal).localeCompare(String(bVal));
+        }
+        
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+    }
+    
+    return data.slice(0, 100);
+  }, [filteredData, sortColumn, sortDirection]);
+
   const setupRef = useRef<{
     margin: { top: number; right: number; bottom: number; left: number };
     width: number;
@@ -38,6 +92,10 @@ export default function TravelerParallelView() {
     x: d3.ScalePoint<string>;
     yScales: Record<string, d3.ScaleLinear<number, number>>;
     ctx: CanvasRenderingContext2D | null;
+    svg: d3.Selection<SVGGElement, unknown, null, undefined>;
+    axis: d3.Selection<SVGGElement, { key: keyof AirbnbListing; label: string }, SVGGElement, unknown>;
+    dimensions: Array<{ key: keyof AirbnbListing; label: string }>;
+    computeYScales: (data: AirbnbListing[]) => Record<string, d3.ScaleLinear<number, number>>;
   } | null>(null);
 
   // SETUP — once
@@ -58,30 +116,38 @@ export default function TravelerParallelView() {
       .append('g')
       .attr('transform', `translate(${margin.left},${margin.top})`);
 
-    const yScales: Record<string, d3.ScaleLinear<number, number>> = {} as any;
-    dimensions.forEach((dim) => {
-      // collect finite numeric values only
-      const values = filteredData.map(d => Number(d[dim.key] ?? 0)).filter(v => Number.isFinite(v));
-      let extent = d3.extent(values) as [number, number];
-
-      // sanitize extent
-      if (extent[0] == null || !Number.isFinite(extent[0])) extent[0] = 0;
-      if (extent[1] == null || !Number.isFinite(extent[1])) extent[1] = extent[0] || 0;
-      if (extent[0] === extent[1]) {
-        // ensure a non-zero span
-        if (extent[0] === 0) extent[1] = 1;
-        else extent[0] = 0;
-      }
-
-      // For availability_365 we want a fixed domain [0, 365] (business constraint)
-      if (dim.key === 'availability_365') {
-        yScales[dim.key] = d3.scaleLinear().domain([0, 365]).range([height, 0]);
-      } else {
-        yScales[dim.key] = d3.scaleLinear().domain(extent).range([height, 0]).nice();
-      }
-    });
-
+    // x scale (stable)
     const x = d3.scalePoint<string>().domain(dimensions.map(d => String(d.key))).range([0, width]);
+
+    // fonction pour calculer les échelles Y basées sur les données actuelles
+    const computeYScales = (data: AirbnbListing[]) => {
+      const scales: Record<string, d3.ScaleLinear<number, number>> = {} as any;
+      dimensions.forEach((dim) => {
+        // collect finite numeric values only
+        const values = data.map(d => Number(d[dim.key] ?? 0)).filter(v => Number.isFinite(v));
+        let extent = d3.extent(values) as [number, number];
+
+        // sanitize extent
+        if (extent[0] == null || !Number.isFinite(extent[0])) extent[0] = 0;
+        if (extent[1] == null || !Number.isFinite(extent[1])) extent[1] = extent[0] || 0;
+        if (extent[0] === extent[1]) {
+          // ensure a non-zero span
+          if (extent[0] === 0) extent[1] = 1;
+          else extent[0] = 0;
+        }
+
+        // For availability_365 we want a fixed domain [0, 365] (business constraint)
+        if (dim.key === 'availability_365') {
+          scales[dim.key] = d3.scaleLinear().domain([0, 365]).range([height, 0]);
+        } else {
+          scales[dim.key] = d3.scaleLinear().domain(extent).range([height, 0]).nice();
+        }
+      });
+      return scales;
+    };
+
+    // scales initiales basées sur les données filtrées
+    const yScales = computeYScales(filteredData);
 
     const axis = svg
       .selectAll<SVGGElement, { key: keyof AirbnbListing; label: string }>('.dimension')
@@ -113,7 +179,18 @@ export default function TravelerParallelView() {
   const { ctx } = setupCanvas(canvasEl, totalWidth, totalHeight);
   if (!ctx) return;
 
-    setupRef.current = { margin, width, height, x, yScales, ctx };
+    setupRef.current = { 
+      margin, 
+      width, 
+      height, 
+      x, 
+      yScales, 
+      ctx, 
+      svg, 
+      axis, 
+      dimensions, 
+      computeYScales 
+    };
 
     return () => {
       ctx.restore();
@@ -128,7 +205,7 @@ export default function TravelerParallelView() {
     const setup = setupRef.current;
     if (!setup || !canvasRef.current) return;
 
-    const { margin, x, yScales, ctx } = setup;
+    const { margin, x, ctx, axis, dimensions, computeYScales } = setup;
     if (!ctx) return;
 
     const colors =
@@ -142,7 +219,7 @@ export default function TravelerParallelView() {
   clearBackingStore(ctx, canvasEl);
 
     const data: AirbnbListing[] = filteredData;
-    const TARGET = Math.min(12000, Math.max(2000, Math.round(data.length * 0.05)));
+    const TARGET = Math.min(10000, Math.max(2000, Math.round(data.length * 0.05))); // Limited to 10,000
     const groups = d3.group(data, (d: AirbnbListing) => d.room_type) as Map<string, AirbnbListing[]>;
     const samples: AirbnbListing[] = [];
     const total = data.length;
@@ -154,14 +231,63 @@ export default function TravelerParallelView() {
       for (let i = 0; i < Math.min(k, shuffled.length); i++) samples.push(shuffled[i]);
     });
 
+    // Recalculer les échelles Y basées sur les données qui seront affichées
+    const dataForScales = renderAll ? data : samples;
+    const yScales = computeYScales(dataForScales);
+    
+    // Mettre à jour les axes avec les nouvelles échelles
+    axis.each(function (this: SVGGElement, dim: { key: keyof AirbnbListing; label: string }) {
+      const scale = yScales[dim.key];
+      const axisGroup = d3.select(this).select('g');
+      if (!axisGroup.empty()) {
+        axisGroup.call(d3.axisLeft(scale).ticks(5) as any);
+      }
+    });
+
     const sourceLines = renderAll
       ? (activeRoomTypes && activeRoomTypes.length > 0 ? data.filter(d => activeRoomTypes.includes(d.room_type)) : data)
       : (activeRoomTypes && activeRoomTypes.length > 0 ? samples.filter(d => activeRoomTypes.includes(d.room_type)) : samples);
 
+    // Use aggregation based on user toggle
+    const needsAggregation = useAggregation;
+    
+    // Aggregation: group lines by discretized coordinates and count frequency
+    let linesToDraw: Array<{ data: AirbnbListing; count: number }> = [];
+    
+    if (needsAggregation) {
+      // Create a map to aggregate similar lines
+      const lineMap = new Map<string, { data: AirbnbListing; count: number }>();
+      
+      sourceLines.forEach(d => {
+        // Create a key based on binned values for each dimension (20 bins per dimension)
+        const key = dimensions.map(dim => {
+          const value = Number(d[dim.key] ?? 0);
+          const scale = yScales[dim.key];
+          const yPos = scale(value);
+          // Bin into 20 segments along the y-axis
+          const bin = Math.floor((yPos / setup.height) * 20);
+          return `${dim.key}:${bin}`;
+        }).join('|');
+        
+        if (lineMap.has(key)) {
+          lineMap.get(key)!.count++;
+        } else {
+          lineMap.set(key, { data: d, count: 1 });
+        }
+      });
+      
+      linesToDraw = Array.from(lineMap.values());
+    } else {
+      linesToDraw = sourceLines.map(d => ({ data: d, count: 1 }));
+    }
+
     const chunkSize = 1500;
     let rafId: number | null = null;
 
-    const drawLine = (d: AirbnbListing) => {
+    // Calculate max count for opacity scaling when aggregating
+    const maxCount = needsAggregation ? Math.max(...linesToDraw.map(l => l.count)) : 1;
+
+    const drawLine = (d: AirbnbListing, count: number = 1) => {
       ctx.beginPath();
       dimensions.forEach((p, i) => {
         const xPos = margin.left + (x(String(p.key)) ?? 0);
@@ -170,33 +296,96 @@ export default function TravelerParallelView() {
         else ctx.lineTo(xPos, yPos);
       });
       ctx.strokeStyle = colorBy(d.room_type) as string;
-      ctx.globalAlpha = 0.6;
-      ctx.lineWidth = 1.2;
+      // Opacity based on count when aggregating
+      if (needsAggregation) {
+        // Scale opacity from 0.2 to 0.9 based on count
+        const opacity = 0.2 + (count / maxCount) * 0.7;
+        ctx.globalAlpha = opacity;
+        // Also vary line width slightly based on frequency
+        ctx.lineWidth = 1.2 + (count / maxCount) * 1.5;
+      } else {
+        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = 1.2;
+      }
       ctx.stroke();
     };
 
-    const renderBatched = (lines: AirbnbListing[]) => {
+    const renderBatched = (lines: Array<{ data: AirbnbListing; count: number }>) => {
       let i = 0;
       const step = () => {
         const end = Math.min(i + chunkSize, lines.length);
-        for (let j = i; j < end; j++) drawLine(lines[j]);
+        for (let j = i; j < end; j++) drawLine(lines[j].data, lines[j].count);
         i = end;
         if (i < lines.length) rafId = requestAnimationFrame(step);
       };
       step();
     };
 
-    renderBatched(sourceLines);
+    renderBatched(linesToDraw);
 
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [filteredData, availRoomTypes, activeRoomTypes, renderAll]);
+  }, [filteredData, availRoomTypes, activeRoomTypes, renderAll, useAggregation]); // Added useAggregation
+
+  // ---------- 3) DRAW SELECTED LINE on top (without full redraw) ----------
+  useEffect(() => {
+    const setup = setupRef.current;
+    const selCanvas = selectionCanvasRef.current;
+    if (!setup || !selCanvas) return;
+
+    const { margin, x, yScales } = setup;
+    
+    // Setup selection canvas with same dimensions as main canvas
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) return;
+    
+    const { ctx: selCtx } = setupCanvas(selCanvas, canvasEl.clientWidth, canvasEl.clientHeight);
+    if (!selCtx) return;
+    
+    // Clear the selection canvas
+    clearBackingStore(selCtx, selCanvas);
+    
+    // Draw the selected line on the selection canvas only
+    if (selectedListing) {
+      selCtx.save();
+      selCtx.beginPath();
+      dimensions.forEach((p, i) => {
+        const xPos = margin.left + (x(String(p.key)) ?? 0);
+        const yPos = margin.top + yScales[p.key](Number(selectedListing[p.key] ?? 0));
+        if (i === 0) selCtx.moveTo(xPos, yPos);
+        else selCtx.lineTo(xPos, yPos);
+      });
+      selCtx.strokeStyle = '#FFD700'; // Gold/yellow color
+      selCtx.globalAlpha = 1;
+      selCtx.lineWidth = 4.5; // Thicker line for selection
+      selCtx.stroke();
+      selCtx.restore();
+    }
+  }, [selectedListing, dimensions]); // Only when selection changes
 
   // --- Stats (inchangées) ---
   const filteredByRoom = (activeRoomTypes && activeRoomTypes.length > 0)
     ? filteredData.filter(d => activeRoomTypes.includes(d.room_type))
     : filteredData;
+
+  // Check if aggregation would be used
+  const data: AirbnbListing[] = filteredData;
+  const TARGET = Math.min(10000, Math.max(2000, Math.round(data.length * 0.05)));
+  const groups = d3.group(data, (d: AirbnbListing) => d.room_type) as Map<string, AirbnbListing[]>;
+  const samples: AirbnbListing[] = [];
+  const total = data.length;
+  availRoomTypes.forEach((rt) => {
+    const group = groups.get(rt) || [];
+    const proportion = group.length / Math.max(1, total);
+    const k = Math.max(5, Math.round(proportion * TARGET));
+    const shuffled = d3.shuffle(group.slice()) as AirbnbListing[];
+    for (let i = 0; i < Math.min(k, shuffled.length); i++) samples.push(shuffled[i]);
+  });
+  const sourceLines = renderAll
+    ? (activeRoomTypes && activeRoomTypes.length > 0 ? data.filter(d => activeRoomTypes.includes(d.room_type)) : data)
+    : (activeRoomTypes && activeRoomTypes.length > 0 ? samples.filter(d => activeRoomTypes.includes(d.room_type)) : samples);
+  const isAggregated = useAggregation;
 
   const statsFor = (arr: number[]) => {
     if (!arr || arr.length === 0) return { count: 0, mean: NaN, median: NaN, std: NaN, min: NaN, max: NaN };
@@ -230,6 +419,7 @@ export default function TravelerParallelView() {
       <p className="viz-description">Compare properties side-by-side ({filteredData.length.toLocaleString()} options)</p>
       <div style={{ position: 'relative', width: '100%' }}>
         <canvas ref={canvasRef} className="parallel-canvas" />
+        <canvas ref={selectionCanvasRef} className="parallel-canvas" style={{ pointerEvents: 'none' }} />
         <svg ref={svgRef} className="parallel-svg" aria-label="Parallel coordinates chart" />
       </div>
 
@@ -241,9 +431,28 @@ export default function TravelerParallelView() {
         >
           {renderAll ? 'Afficher échantillon' : 'Afficher tout'}
         </button>
+        <button
+          onClick={() => setUseAggregation(a => !a)}
+          style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.08)', background: useAggregation ? '#e0f2fe' : '#fff', cursor: 'pointer' }}
+          title="Activer l'agrégation pour réduire le nombre de lignes affichées"
+        >
+          {useAggregation ? '📊 Agrégation ON' : 'Agrégation OFF'}
+        </button>
         {renderAll && (
           <div style={{ fontSize: 12, color: '#a33' }}>
             Affichage complet: {filteredData.length.toLocaleString()} lignes — peut être lent
+          </div>
+        )}
+        {isAggregated && (
+          <div style={{ 
+            fontSize: 12, 
+            color: '#3b82f6',
+            backgroundColor: '#eff6ff',
+            padding: '4px 8px',
+            borderRadius: 4,
+            fontWeight: 500
+          }}>
+            Opacité = densité ({sourceLines.length.toLocaleString()} lignes à afficher)
           </div>
         )}
       </div>
@@ -310,9 +519,82 @@ export default function TravelerParallelView() {
                     {c.toLocaleString()} ({((c / Math.max(1, totalShown)) * 100).toFixed(1)}%)
                   </div>
                 </div>
-              ))}
+                ))}
             </div>
           </div>
+        </div>
+
+        {/* Data Table */}
+        <div className="data-table-container">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <h3 style={{ margin: 0 }}>
+              Data Table (First {sortedTableData.length} of {filteredData.length} rows)
+              {selectedListing && <span style={{ color: '#FFD700', marginLeft: '0.5rem', fontWeight: 'bold' }}>● 1 selected</span>}
+            </h3>
+            {selectedListing && (
+              <button
+                onClick={() => setSelectedListing(null)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                }}
+              >
+                Clear Selection
+              </button>
+            )}
+          </div>
+          <p style={{ fontSize: '0.875rem', color: '#666', marginBottom: '1rem' }}>
+            💡 Click on any row to highlight it in the parallel coordinates chart above
+          </p>
+          <table className="data-table">
+            <thead>
+              <tr>
+                {(Object.keys(sortedTableData[0] || {}) as Array<keyof AirbnbListing>).map((column) => (
+                  <th
+                    key={column}
+                    onClick={() => handleSort(column)}
+                    style={{
+                      backgroundColor: sortColumn === column ? '#f0f0f0' : 'transparent',
+                      fontWeight: sortColumn === column ? 'bold' : 'normal',
+                    }}
+                  >
+                    {column}
+                    {sortColumn === column && (
+                      <span style={{ marginLeft: '0.5rem' }}>
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedTableData.map((row, idx) => (
+                <tr 
+                  key={idx}
+                  onClick={() => setSelectedListing(row)}
+                  style={{
+                    cursor: 'pointer',
+                    backgroundColor: selectedListing === row ? '#FFFACD' : 'transparent', // Light yellow background
+                  }}
+                >
+                  {(Object.keys(row) as Array<keyof AirbnbListing>).map((column) => (
+                    <td
+                      key={column}
+                      title={String(row[column])}
+                    >
+                      {row[column] != null ? String(row[column]) : '-'}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

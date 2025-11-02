@@ -20,6 +20,9 @@ export default function HostParallelView() {
   // toggle affichage complet vs échantillon
   const [renderAll, setRenderAll] = useState(false);
   
+  // toggle agrégation
+  const [useAggregation, setUseAggregation] = useState(false);
+  
   // Filtre par host_name ou host_id
   const [hostFilter, setHostFilter] = useState('');
   
@@ -75,7 +78,7 @@ export default function HostParallelView() {
   // Memoize samples to prevent resampling on selection change
   const sampledData = useMemo(() => {
     const data: AirbnbListing[] = dataFilteredByHost;
-    const TARGET = Math.min(12000, Math.max(2000, Math.round(data.length * 0.05)));
+    const TARGET = Math.min(10000, Math.max(2000, Math.round(data.length * 0.05))); // Limited to 10,000
     const groups = d3.group(data, (d: AirbnbListing) => d.room_type) as Map<string, AirbnbListing[]>;
     const samples: AirbnbListing[] = [];
     const total = data.length;
@@ -126,6 +129,10 @@ export default function HostParallelView() {
     x: d3.ScalePoint<string>;
     yScales: Record<string, d3.ScaleLinear<number, number>>;
     ctx: CanvasRenderingContext2D | null;
+    svg: d3.Selection<SVGGElement, unknown, null, undefined>;
+    axis: d3.Selection<SVGGElement, { key: keyof AirbnbListing; label: string }, SVGGElement, unknown>;
+    dimensions: Array<{ key: keyof AirbnbListing; label: string }>;
+    computeYScales: (data: AirbnbListing[]) => Record<string, d3.ScaleLinear<number, number>>;
   } | null>(null);
 
   // ---------- 1) SETUP — axes + scales + canvas (UNE FOIS) ----------
@@ -148,30 +155,38 @@ export default function HostParallelView() {
       .append('g')
       .attr('transform', `translate(${margin.left},${margin.top})`);
 
-    // scales initiales basées sur l'état courant (elles resteront stables ensuite)
-    const yScales: Record<string, d3.ScaleLinear<number, number>> = {} as any;
-    dimensions.forEach((dim) => {
-      // collect finite numeric values only
-      const values = filteredData.map(d => Number(d[dim.key] ?? 0)).filter(v => Number.isFinite(v));
-      let extent = d3.extent(values) as [number, number];
-
-      // sanitize extent
-      if (extent[0] == null || !Number.isFinite(extent[0])) extent[0] = 0;
-      if (extent[1] == null || !Number.isFinite(extent[1])) extent[1] = extent[0] || 0;
-      if (extent[0] === extent[1]) {
-        // ensure a non-zero span
-        if (extent[0] === 0) extent[1] = 1;
-        else extent[0] = 0;
-      }
-
-      // For availability_365 we want a fixed domain [0, 365] (business constraint)
-      if (dim.key === 'availability_365') {
-        yScales[dim.key] = d3.scaleLinear().domain([0, 365]).range([height, 0]);
-      } else {
-        yScales[dim.key] = d3.scaleLinear().domain(extent).range([height, 0]).nice();
-      }
-    });
+    // x scale (stable)
     const x = d3.scalePoint<string>().domain(dimensions.map(d => String(d.key))).range([0, width]);
+
+    // fonction pour calculer les échelles Y basées sur les données actuelles
+    const computeYScales = (data: AirbnbListing[]) => {
+      const scales: Record<string, d3.ScaleLinear<number, number>> = {} as any;
+      dimensions.forEach((dim) => {
+        // collect finite numeric values only
+        const values = data.map(d => Number(d[dim.key] ?? 0)).filter(v => Number.isFinite(v));
+        let extent = d3.extent(values) as [number, number];
+
+        // sanitize extent
+        if (extent[0] == null || !Number.isFinite(extent[0])) extent[0] = 0;
+        if (extent[1] == null || !Number.isFinite(extent[1])) extent[1] = extent[0] || 0;
+        if (extent[0] === extent[1]) {
+          // ensure a non-zero span
+          if (extent[0] === 0) extent[1] = 1;
+          else extent[0] = 0;
+        }
+
+        // For availability_365 we want a fixed domain [0, 365] (business constraint)
+        if (dim.key === 'availability_365') {
+          scales[dim.key] = d3.scaleLinear().domain([0, 365]).range([height, 0]);
+        } else {
+          scales[dim.key] = d3.scaleLinear().domain(extent).range([height, 0]).nice();
+        }
+      });
+      return scales;
+    };
+
+    // scales initiales basées sur les données filtrées
+    const yScales = computeYScales(filteredData);
 
     // axes (ne seront PAS recréés)
     const axis = svg
@@ -207,7 +222,18 @@ export default function HostParallelView() {
   if (!ctx) return;
 
     // stocker le setup pour les redraws
-    setupRef.current = { margin, width, height, x, yScales, ctx };
+    setupRef.current = { 
+      margin, 
+      width, 
+      height, 
+      x, 
+      yScales, 
+      ctx, 
+      svg, 
+      axis, 
+      dimensions, 
+      computeYScales 
+    };
 
     // cleanup à l'unmount uniquement
     return () => {
@@ -223,8 +249,21 @@ export default function HostParallelView() {
     const setup = setupRef.current;
     if (!setup || !canvasRef.current) return;
 
-    const { margin, x, yScales, ctx } = setup;
+    const { margin, x, ctx, axis, dimensions, computeYScales } = setup;
     if (!ctx) return;
+
+    // Recalculer les échelles Y basées sur les données filtrées actuelles
+    const dataForScales = renderAll ? dataFilteredByHost : sampledData;
+    const yScales = computeYScales(dataForScales);
+    
+    // Mettre à jour les axes avec les nouvelles échelles
+    axis.each(function (this: SVGGElement, dim: { key: keyof AirbnbListing; label: string }) {
+      const scale = yScales[dim.key];
+      const axisGroup = d3.select(this).select('g');
+      if (!axisGroup.empty()) {
+        axisGroup.call(d3.axisLeft(scale).ticks(5) as any);
+      }
+    });
 
     // couleurs par room type (peut changer avec les filtres)
     const colors =
@@ -249,11 +288,47 @@ export default function HostParallelView() {
       ? (activeRoomTypes && activeRoomTypes.length > 0 ? data.filter(d => activeRoomTypes.includes(d.room_type)) : data)
       : (activeRoomTypes && activeRoomTypes.length > 0 ? sampledData.filter(d => activeRoomTypes.includes(d.room_type)) : sampledData);
 
+    // Use aggregation based on user toggle
+    const needsAggregation = useAggregation;
+    
+    // Aggregation: group lines by discretized coordinates and count frequency
+    let linesToDraw: Array<{ data: AirbnbListing; count: number }> = [];
+    
+    if (needsAggregation) {
+      // Create a map to aggregate similar lines
+      const lineMap = new Map<string, { data: AirbnbListing; count: number }>();
+      
+      sourceLines.forEach(d => {
+        // Create a key based on binned values for each dimension (20 bins per dimension)
+        const key = dimensions.map(dim => {
+          const value = Number(d[dim.key] ?? 0);
+          const scale = yScales[dim.key];
+          const yPos = scale(value);
+          // Bin into 20 segments along the y-axis
+          const bin = Math.floor((yPos / setup.height) * 20);
+          return `${dim.key}:${bin}`;
+        }).join('|');
+        
+        if (lineMap.has(key)) {
+          lineMap.get(key)!.count++;
+        } else {
+          lineMap.set(key, { data: d, count: 1 });
+        }
+      });
+      
+      linesToDraw = Array.from(lineMap.values());
+    } else {
+      linesToDraw = sourceLines.map(d => ({ data: d, count: 1 }));
+    }
+
     // dessin batched
     const chunkSize = 1500;
     let rafId: number | null = null;
 
-    const drawLine = (d: AirbnbListing, isSelected = false) => {
+    // Calculate max count for opacity scaling when aggregating
+    const maxCount = needsAggregation ? Math.max(...linesToDraw.map(l => l.count)) : 1;
+
+    const drawLine = (d: AirbnbListing, count: number = 1, isSelected = false) => {
       ctx.beginPath();
       dimensions.forEach((p, i) => {
         const xPos = margin.left + (x(String(p.key)) ?? 0);
@@ -268,18 +343,27 @@ export default function HostParallelView() {
         ctx.lineWidth = 4.5; // Thicker line for selection
       } else {
         ctx.strokeStyle = colorBy(d.room_type) as string;
-        ctx.globalAlpha = 0.6; // Normal opacity for regular lines
-        ctx.lineWidth = 1.2;
+        // Opacity based on count when aggregating
+        if (needsAggregation) {
+          // Scale opacity from 0.2 to 0.9 based on count
+          const opacity = 0.2 + (count / maxCount) * 0.7;
+          ctx.globalAlpha = opacity;
+          // Also vary line width slightly based on frequency
+          ctx.lineWidth = 1.2 + (count / maxCount) * 1.5;
+        } else {
+          ctx.globalAlpha = 0.6;
+          ctx.lineWidth = 1.2;
+        }
       }
       ctx.stroke();
     };
 
-    const renderBatched = (lines: AirbnbListing[]) => {
+    const renderBatched = (lines: Array<{ data: AirbnbListing; count: number }>) => {
       let i = 0;
       const step = () => {
         const end = Math.min(i + chunkSize, lines.length);
         for (let j = i; j < end; j++) {
-          drawLine(lines[j], false); // Draw all lines normally, selection will be drawn separately
+          drawLine(lines[j].data, lines[j].count, false); // Draw all lines normally, selection will be drawn separately
         }
         i = end;
         if (i < lines.length) {
@@ -289,13 +373,13 @@ export default function HostParallelView() {
       step();
     };
 
-    renderBatched(sourceLines);
+    renderBatched(linesToDraw);
 
     // cleanup du RAF uniquement (on NE vide PAS le svg)
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [dataFilteredByHost, availRoomTypes, activeRoomTypes, renderAll, sampledData]); // Removed selectedListing from deps
+  }, [dataFilteredByHost, availRoomTypes, activeRoomTypes, renderAll, sampledData, useAggregation]); // Added useAggregation
 
   // ---------- 3) DRAW SELECTED LINE on top (without full redraw) ----------
   useEffect(() => {
@@ -337,6 +421,13 @@ export default function HostParallelView() {
   const filteredByRoom = (activeRoomTypes && activeRoomTypes.length > 0)
     ? dataFilteredByHost.filter(d => activeRoomTypes.includes(d.room_type))
     : dataFilteredByHost;
+
+  // Check if aggregation would be used
+  const data: AirbnbListing[] = dataFilteredByHost;
+  const sourceLines = renderAll
+    ? (activeRoomTypes && activeRoomTypes.length > 0 ? data.filter(d => activeRoomTypes.includes(d.room_type)) : data)
+    : (activeRoomTypes && activeRoomTypes.length > 0 ? sampledData.filter(d => activeRoomTypes.includes(d.room_type)) : sampledData);
+  const isAggregated = useAggregation;
 
   const statsFor = (arr: number[]) => {
     if (!arr || arr.length === 0) return { count: 0, mean: NaN, median: NaN, std: NaN, min: NaN, max: NaN };
@@ -429,9 +520,28 @@ export default function HostParallelView() {
         >
           {renderAll ? 'Afficher échantillon' : 'Afficher tout'}
         </button>
+        <button
+          onClick={() => setUseAggregation(a => !a)}
+          style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.08)', background: useAggregation ? '#e0f2fe' : '#fff', cursor: 'pointer' }}
+          title="Activer l'agrégation pour réduire le nombre de lignes affichées"
+        >
+          {useAggregation ? '📊 Agrégation ON' : 'Agrégation OFF'}
+        </button>
         {renderAll && (
           <div style={{ fontSize: 12, color: '#a33' }}>
             Affichage complet: {dataFilteredByHost.length.toLocaleString()} lignes — peut être lent
+          </div>
+        )}
+        {isAggregated && (
+          <div style={{ 
+            fontSize: 12, 
+            color: '#3b82f6',
+            backgroundColor: '#eff6ff',
+            padding: '4px 8px',
+            borderRadius: 4,
+            fontWeight: 500
+          }}>
+            Opacité = densité ({sourceLines.length.toLocaleString()} lignes à afficher)
           </div>
         )}
       </div>
