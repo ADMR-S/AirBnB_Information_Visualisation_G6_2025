@@ -3,6 +3,7 @@ import * as topojson from 'topojson-client';
 import type { BubbleData, NeighborhoodField, CityBoundary } from '../../../types/bubbleMap.types';
 import { MAP_CONFIG } from './mapConfig';
 import { createColorScale, createRadiusScale } from './mapUtils';
+import { showTooltip, hideTooltip, updateTooltipPosition } from '../../../utils/tooltip';
 
 /**
  * Creates bubbles on the map based on specified parameters
@@ -50,8 +51,16 @@ export function makeBubbles(
     .attr("fill-opacity", MAP_CONFIG.bubbles.fillOpacity)
     .attr("stroke", MAP_CONFIG.bubbles.strokeColor)
     .attr("stroke-width", MAP_CONFIG.bubbles.strokeWidth)
-    .append("title")
-    .text(d => `${d.label}\nListings: ${d.sizeValue}\nAvg Price: $${d.colorValue.toFixed(0)}`);
+    .on("mouseover", function(event: MouseEvent, d: any) {
+      const content = `<strong>${d.label}</strong><br/>Listings: ${d.sizeValue}<br/>Avg Price: $${d.colorValue.toFixed(0)}`;
+      showTooltip(event, content);
+    })
+    .on("mousemove", function(event: MouseEvent) {
+      updateTooltipPosition(event);
+    })
+    .on("mouseout", function() {
+      hideTooltip();
+    });
 }
 
 /**

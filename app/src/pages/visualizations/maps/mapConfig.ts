@@ -28,7 +28,7 @@ export const MAP_CONFIG = {
     strokeOpacity: 0.3
   },
   fisheye: {
-    baseRadius: 150, // Base radius at zoom level 1
+    baseRadius: 75, // Base radius at zoom level 1
     radiusScaleFactor: 0.5, // How much radius scales with zoom (radius = baseRadius / (zoom * factor))
     distortion: 2, // Magnification factor (higher = stronger distortion)
     listingBubbleRadius: 2, // Size of individual listing bubbles
