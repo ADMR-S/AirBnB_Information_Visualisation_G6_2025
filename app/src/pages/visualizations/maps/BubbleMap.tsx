@@ -82,6 +82,9 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
         console.log(`[BubbleMap] renderVisualization called with zoomLevel: ${zoomLevel.toFixed(2)}`);
       }
       
+      // Hide tooltips when re-rendering to prevent orphaned tooltips
+      d3.selectAll('.viz-tooltip').remove();
+      
       // Remove existing visualizations
       g.selectAll('.bubble').remove();
       g.selectAll('.neighborhood-fields').remove();
@@ -121,6 +124,9 @@ export default function BubbleMap({ filteredData, persona, isLoading }: BubbleMa
         // Re-render visualization if we cross the threshold
         if ((previousZoomLevel < MAP_CONFIG.zoom.cityThreshold && zoomLevel >= MAP_CONFIG.zoom.cityThreshold) || 
             (previousZoomLevel >= MAP_CONFIG.zoom.cityThreshold && zoomLevel < MAP_CONFIG.zoom.cityThreshold)) {
+          // Hide tooltips when crossing threshold to prevent orphaned tooltips
+          d3.selectAll('.viz-tooltip').remove();
+          
           renderVisualization(zoomLevel);
           
           // Clean up fisheye elements when zooming out to city level
