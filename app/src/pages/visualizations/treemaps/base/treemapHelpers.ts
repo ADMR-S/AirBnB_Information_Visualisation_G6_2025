@@ -138,6 +138,8 @@ export function renderTreemapSVG(
     .on('click', function(event, d: any) {
       event.stopPropagation();
       if (d.data.level !== options.finalLevel) {
+        // Reset zoom before drilling down
+        svg.transition().duration(500).call(zoom.transform as any, d3.zoomIdentity);
         options.onDrillDown(d.data);
       }
     });
