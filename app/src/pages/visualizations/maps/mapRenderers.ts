@@ -2,7 +2,7 @@ import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import type { BubbleData, NeighborhoodField, CityBoundary } from '../../../types/bubbleMap.types';
 import { MAP_CONFIG } from './mapConfig';
-import { createColorScale, createRadiusScale } from './mapUtils';
+import { createRadiusScale } from './mapUtils';
 import { showTooltip, hideTooltip, updateTooltipPosition } from '../../../utils/tooltip';
 
 /**
@@ -22,8 +22,10 @@ export function makeBubbles(
 ) {
   // Create scales
   const radiusScale = createRadiusScale(maxSizeValue, sizeRange);
-  const maxColorValue = d3.max(bubbleData, d => d.colorValue) || 1;
-  const colorScale = createColorScale(maxColorValue);
+  const prices = bubbleData.map(d => d.colorValue);
+  const minPrice = d3.min(prices) || 0;
+  const maxPrice = d3.max(prices) || 1;
+  const colorScale = d3.scaleSequential(d3.interpolateRdYlGn).domain([maxPrice, minPrice]);
 
   // Pre-project all coordinates for performance
   const projectedBubbles = bubbleData.map(d => {
@@ -47,7 +49,7 @@ export function makeBubbles(
     .attr("cx", d => d.x)
     .attr("cy", d => d.y)
     .attr("r", d => radiusScale(d.sizeValue))
-    .attr("fill", d => colorScale(d.colorValue))
+    .attr("fill", d => colorScale(d.colorValue) as string)
     .attr("fill-opacity", MAP_CONFIG.bubbles.fillOpacity)
     .attr("stroke", MAP_CONFIG.bubbles.strokeColor)
     .attr("stroke-width", MAP_CONFIG.bubbles.strokeWidth)

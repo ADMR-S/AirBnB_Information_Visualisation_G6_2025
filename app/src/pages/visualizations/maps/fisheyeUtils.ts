@@ -232,8 +232,8 @@ export function updateSelectedListing(
       .attr('class', 'fisheye-listing selected-listing')
       .attr('fill', '#FF5722')
       .attr('fill-opacity', 0.9)
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 0.02)
+      .attr('stroke', '#000')
+      .attr('stroke-width', 0.1)
       .style('cursor', 'pointer')
       .style('pointer-events', 'none');
   }
@@ -309,6 +309,28 @@ export function renderHostProperties(
       .attr('stroke-width', triangleStrokeWidth)
       .style('pointer-events', 'none');
   });
+}
+
+/**
+ * Helper function to create a selected listing circle with fisheye distortion
+ */
+function createSelectedListingCircle(
+  group: d3.Selection<SVGGElement, unknown, null, undefined>,
+  x: number,
+  y: number,
+  radius: number,
+  strokeWidth: number
+): void {
+  group.append('circle')
+    .attr('class', 'fisheye-listing selected-listing')
+    .attr('cx', x)
+    .attr('cy', y)
+    .attr('r', radius)
+    .attr('fill', '#FF5722')
+    .attr('fill-opacity', 0.9)
+    .attr('stroke', '#000')
+    .attr('stroke-width', strokeWidth)
+    .style('pointer-events', 'none');
 }
 
 /**
@@ -432,16 +454,7 @@ export function renderFisheyeListings(
       
       // Create selected listing bubble with fisheye distortion
       const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
-      fisheyeGroup.append('circle')
-        .attr('class', 'fisheye-listing selected-listing')
-        .attr('cx', distorted.x)
-        .attr('cy', distorted.y)
-        .attr('r', listingBubbleRadius)
-        .attr('fill', '#FF5722')
-        .attr('fill-opacity', 0.9)
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 0.02)
-        .style('pointer-events', 'none'); // Prevent interaction with selected bubble
+      createSelectedListingCircle(fisheyeGroup, distorted.x, distorted.y, listingBubbleRadius, fisheyeStrokeWidth);
     })
     .on('mouseover', function(this: SVGCircleElement) {
       d3.select(this)
@@ -469,16 +482,7 @@ export function renderFisheyeListings(
     fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing').remove();
     
     // Create selected listing bubble with fisheye distortion
-    fisheyeGroup.append('circle')
-      .attr('class', 'fisheye-listing selected-listing')
-      .attr('cx', distorted.x)
-      .attr('cy', distorted.y)
-      .attr('r', listingBubbleRadius)
-      .attr('fill', '#FF5722')
-      .attr('fill-opacity', 0.9)
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 0.02)
-      .style('pointer-events', 'none');
+    createSelectedListingCircle(fisheyeGroup, distorted.x, distorted.y, listingBubbleRadius, fisheyeStrokeWidth);
   } else if (selectedListingId) {
     // Selected listing exists but is outside fisheye - keep it at original position
     const selectedListing = listings.find(l => l.id === selectedListingId);
@@ -493,8 +497,8 @@ export function renderFisheyeListings(
             .attr('class', 'fisheye-listing selected-listing')
             .attr('fill', '#FF5722')
             .attr('fill-opacity', 0.9)
-            .attr('stroke', '#fff')
-            .attr('stroke-width', 0.02)
+            .attr('stroke', '#000')
+            .attr('stroke-width', 0.1)
             .style('pointer-events', 'none');
         }
         

@@ -104,8 +104,8 @@
 .fisheye-listing.selected-listing {
   fill: #FF5722 !important;
   fill-opacity: 0.9 !important;
-  stroke: #fff !important;
-  stroke-width: 0.02 !important;
+  stroke: #000 !important;
+  stroke-width: 0.1 !important;
   pointer-events: none;
 }
 
