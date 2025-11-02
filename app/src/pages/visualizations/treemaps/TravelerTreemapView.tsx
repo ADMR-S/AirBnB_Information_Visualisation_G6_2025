@@ -8,7 +8,7 @@ const TRAVELER_CONFIG: TreemapViewConfig = {
   title: 'Availability Explorer',
   description: 'Geographic distribution of listings available ({count} listings)',
   badges: [EXAMPLE_BADGES.popular, EXAMPLE_BADGES.highActivity],
-  finalLevel: 'availability_category',
+  finalLevel: 'room_type',
 
   buildHierarchy: (filteredData, currentLevel, aggregate) => {
     if (currentLevel === 0) {
@@ -27,13 +27,13 @@ const TRAVELER_CONFIG: TreemapViewConfig = {
         ({ name: neighbourhood, level: 'neighbourhood', ...aggregate(listings) })) };
     }
     if (currentLevel === 3) {
-      const grouped = d3.group(filteredData, d => d.room_type);
-      return { name: 'root', children: Array.from(grouped, ([roomType, listings]) => 
-        ({ name: roomType, level: 'room_type', ...aggregate(listings) })) };
+      const grouped = d3.group(filteredData, d => categorizeAvailability(d.availability_365));
+      return { name: 'root', children: Array.from(grouped, ([category, listings]) => 
+        ({ name: category, level: 'availability_category', ...aggregate(listings) })) };
     }
-    const grouped = d3.group(filteredData, d => categorizeAvailability(d.availability_365));
-    return { name: 'root', children: Array.from(grouped, ([category, listings]) => 
-      ({ name: category, level: 'availability_category', ...aggregate(listings) })) };
+    const grouped = d3.group(filteredData, d => d.room_type);
+    return { name: 'root', children: Array.from(grouped, ([roomType, listings]) => 
+      ({ name: roomType, level: 'room_type', ...aggregate(listings) })) };
   },
 
   createColorScale: (nodes) => {
