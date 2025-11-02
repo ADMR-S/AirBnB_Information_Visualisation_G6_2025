@@ -4,7 +4,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { useFilterStore } from '../../../stores/useFilterStore';
 import { useFilteredData } from '../../../hooks/useFilteredData';
-import type { AirbnbListing } from '../../../types/airbnb.types';
 import '../VisualizationPage.css';
 
 export default function TravelerViolinView() {
@@ -125,10 +124,10 @@ export default function TravelerViolinView() {
         .attr('fill', isAffordable ? '#86efac' : '#fca5a5')
         .attr('stroke', '#333')
         .attr('opacity', 0.85)
-        .attr('d', area)
+        .attr('d', area as any)
         .style('cursor', 'pointer')
         .on('click', () => setSelectedRoomType(group))
-        .on('mouseover', event => {
+        .on('mouseover', _ => {
           tooltip.style('opacity', 1)
             .html(`
               <strong>${group}</strong><br/>
@@ -253,8 +252,8 @@ export default function TravelerViolinView() {
         .attr('fill', isAffordable ? '#86efac' : '#fca5a5')
         .attr('stroke', '#333')
         .attr('opacity', 0.85)
-        .attr('d', area)
-        .on('mouseover', event => {
+        .attr('d', area as any)
+        .on('mouseover', _ => {
           tooltip.style('opacity', 1)
             .html(`
               <strong>${city}</strong><br/>
