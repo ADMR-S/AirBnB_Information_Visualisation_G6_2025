@@ -140,6 +140,7 @@ export function renderTreemapSVG(
     colorFn: (d: any) => string;
     tooltipFn: (d: any) => string;
     badges?: BadgeConfig[];
+    badgeThresholds?: Map<BadgeConfig, number>;
     onDrillDown: (data: any) => void;
     finalLevel: string;
   }
@@ -199,7 +200,7 @@ export function renderTreemapSVG(
 
     // Get applicable badges and their icons
     const applicableBadges = options.badges
-      ? getApplicableBadges(d.data, options.badges)
+      ? getApplicableBadges(d.data, options.badges, options.badgeThresholds)
       : [];
     const badgeIcons = applicableBadges.map(b => b.icon).join(' ');
     
