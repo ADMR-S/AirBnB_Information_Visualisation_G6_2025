@@ -191,16 +191,18 @@
 
 .host-popup-btn-cancel:hover {
   background: var(--color-gray-100);
+  color: var(--color-action-cancel-hover);
 }
-
+  
 .host-popup-btn-confirm {
-  background: var(--color-brand-primary);
+  background: var(--colo-bg-white);
   border: 1px solid var(--color-border-dark);
   color: var(--color-action-confirm);
 }
 
 .host-popup-btn-confirm:hover:not(:disabled) {
   background: var(--color-gray-100);
+  color: var(--color-action-confirm-hover);
 }
 
 .host-popup-btn-confirm:disabled {

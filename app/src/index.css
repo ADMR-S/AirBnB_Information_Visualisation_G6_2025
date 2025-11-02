@@ -1,17 +1,26 @@
 :root {
   /* Purple/Blue Gradient Colors */
   --color-purple-light: #667eea;
+  --color-purple-light-dark: #5568d3;
   --color-purple: #764ba2;
+  --color-purple-dark: #5a4287;
 
 /* Button Action Colors */ 
---color-action-cancel: #6C757D;    /* Bootstrap secondary/gray */
---color-action-confirm: #28A745;   /* Bootstrap success green */
---color-action-cancel: #6B7280;    /* Tailwind gray-500 */
---color-action-confirm: #22C55E;   /* Tailwind green-500 */
---color-action-cancel: #757575;    /* Material grey-600 */
---color-action-confirm: #4CAF50;   /* Material green-500 */
+--color-action-cancel: #6C757D;
+--color-action-cancel-hover: #5a6268;
+--color-action-confirm: #28A745;
+--color-action-confirm-hover: #218838;
+--color-action-destructive: #f44336;
+--color-action-destructive-hover: #d32f2f;
 
-
+  /* Text Colors */
+  --color-text-primary: #222;
+  --color-text-secondary: #333;
+  --color-text-tertiary: #555;
+  --color-text-muted: #666;
+  --color-text-light: #717171;
+  --color-text-lighter: #999;
+  --color-text-white: #ffffff;
   
   /* Gray Scale */
   --color-gray-100: #f7f7f7;
