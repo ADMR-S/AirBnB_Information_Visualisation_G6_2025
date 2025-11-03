@@ -360,7 +360,7 @@ function createSelectedListingCircle(
 /**
  * Renders individual listing bubbles within fisheye lens
  * @param container D3 selection of the container element
- * @param listings Array of listings to render (DEPRECATED - use spatialIndex instead)
+ * @param listings Array of listings to render
  * @param projection D3 geo projection
  * @param fisheyeFocus Focus point of the fisheye
  * @param zoomLevel Current zoom level
