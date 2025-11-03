@@ -9,6 +9,7 @@ import { createProjection, createNullProjectionPath } from './mapUtils';
 import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap, renderSizeLegend, renderColorLegend, renderReviewsLegend } from './mapRenderers';
 import { renderFisheyeListings, applyFisheyeToBasemap, restoreBasemapPaths, getFisheyeRadius, updateSelectedListing, renderHostProperties } from './fisheyeUtils';
 import { MAP_CONFIG } from './mapConfig';
+import { throttleRAF } from '../../../utils/throttle';
 import ListingDetails from '../../../components/ListingDetails';
 import '../VisualizationPage.css';
 import './BubbleMap.css';
@@ -268,7 +269,9 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
 
     // Add fisheye interaction (only at neighborhood zoom level)
     if (MAP_CONFIG.fisheye.enabled) {
-      svg.on('mousemove', function(event: MouseEvent) {
+      // Create throttled handler with 32ms delay (~30fps updates instead of 60fps)
+      // Increase to 50ms for ~20fps or 100ms for ~10fps if you want even less frequent updates
+      const throttledMouseMove = throttleRAF(function(event: MouseEvent) {
         // Don't activate fisheye if mouse is over a popup
         const target = event.target as HTMLElement;
         if (target.closest('.listing-popup')) {
@@ -296,7 +299,9 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           g.selectAll('.fisheye-listing:not(.selected-listing)').remove();
           g.selectAll('.fisheye-lens-circle').remove();
         }
-      });
+      }, 32); // 32ms delay = ~30fps (increase to 50 for ~20fps, or 100 for ~10fps)
+      
+      svg.on('mousemove', throttledMouseMove);
       
       svg.on('mouseleave', function() {
         setFisheyeActive(false);
