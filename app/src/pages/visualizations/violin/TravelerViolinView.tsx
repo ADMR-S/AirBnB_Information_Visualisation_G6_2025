@@ -1,5 +1,7 @@
 // @ts-ignore
+
 import React, { useEffect, useRef, useState } from 'react';
+import { useSelectedListing } from '../../../contexts/SelectedListingContext';
 // @ts-ignore - d3 types not installed
 import * as d3 from 'd3';
 import { useFilterStore } from '../../../stores/useFilterStore';
@@ -10,6 +12,7 @@ export default function TravelerViolinView() {
   const { isLoading } = useFilterStore();
   const filteredData = useFilteredData();
 
+  const { selectedListing } = useSelectedListing();
   const svgRefOverview = useRef<SVGSVGElement | null>(null);
   const svgRefCity = useRef<SVGSVGElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
@@ -52,7 +55,7 @@ export default function TravelerViolinView() {
       .attr('transform', `translate(${margin.left},${margin.top})`);
 
     const data = filteredData
-    .filter(d => d.price && d.price > 0 && d.price < 2000 && d.availability_365 && d.availability_365 > 0)
+    .filter(d => d.price && d.price > 0 && d.availability_365 && d.availability_365 > 0)
     .map(d => ({
       // grouping keys
       room_type: d.room_type,
@@ -231,6 +234,34 @@ export default function TravelerViolinView() {
 
 
     });
+    if (selectedListing) {
+  const roomType = selectedListing.room_type;
+  const price = Number(selectedListing.price);
+  const availability = Number(selectedListing.availability_365 ?? 0);
+  const city = selectedListing.city;
+
+  // Apply same filtering logic as the violins
+  if (availability > 0 && !isNaN(price) && price > 0) {
+    const svg = d3.select(svgRefOverview.current);
+    const xPos = x(roomType)! + bandwidth - 6;
+    const yPos = y(Math.log10(price));
+
+    // remove previous highlight if any
+    svg.selectAll('.selected-listing-point').remove();
+
+    svg.append('circle')
+      .attr('class', 'selected-listing-point')
+      .attr('cx', xPos)
+      .attr('cy', yPos)
+      .attr('r', 6)
+      .attr('fill', '#FFD700')
+      .attr('stroke', '#333')
+      .attr('stroke-width', 1.5)
+      .style('pointer-events', 'none')
+      .append('title')
+      .text(`${city || ''}\n$${price.toFixed(0)}\n${roomType}`);
+  }
+}
   }, [filteredData, budget]);
   useEffect(() => {
     // Reapply gold color after redraws (e.g., budget changes)
@@ -264,7 +295,7 @@ export default function TravelerViolinView() {
       .attr('transform', `translate(${margin.left},${margin.top})`);
 
     const data = filteredData
-      .filter(d => d.price > 0 && d.price < 2000 && d.room_type === selectedRoomType && d.availability_365 && d.availability_365 > 0)
+      .filter(d => d.price > 0 && d.room_type === selectedRoomType && d.availability_365 && d.availability_365 > 0)
       .map(d => ({
         // grouping keys
         city: d.city,
@@ -424,6 +455,42 @@ reps.forEach(rep => {
 
 
     });
+
+    if (selectedListing && selectedListing.room_type === selectedRoomType) {
+  const cityKey = String(selectedListing.city ?? '');
+
+  // Only plot if the city of the selected listing is in the top 10 domain
+  if (topCities.includes(cityKey)) {
+    const xPosBase = x(cityKey);             // use the city-level band scale
+    const bw = x.bandwidth();                // city-level bandwidth
+    const price = Number(selectedListing.price);
+
+    if (xPosBase != null && Number.isFinite(price) && price > 0) {
+      const xPos = xPosBase + bw * 2 / 3 - 25;
+      const yPos = y(Math.log10(Math.max(1, price)));
+
+      // Remove previous marker in this SVG only
+      d3.select(svgRefCity.current)
+        .selectAll('.selected-listing-point')
+        .remove();
+
+      d3.select(svgRefCity.current)
+        .append('circle')
+        .attr('class', 'selected-listing-point')
+        .attr('cx', xPos)
+        .attr('cy', yPos)
+        .attr('r', 6)
+        .attr('fill', '#FFD700')
+        .attr('stroke', '#333')
+        .attr('stroke-width', 1.5)
+        .style('pointer-events', 'none');
+    }
+  } else {
+    // Optional: if the selected city is not in the top-10,
+    // you can skip plotting OR show a small notice/toast.
+    // console.warn('Selected listing city not in top-10 domain:', cityKey);
+  }
+}
     
   }, [selectedRoomType, filteredData, budget]);
   // }, [filteredData, budget]);
