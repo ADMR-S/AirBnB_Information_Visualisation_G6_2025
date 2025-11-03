@@ -1,7 +1,7 @@
 # AirBnB_Information_Visualisation_G6_2025
 
 ## Hosted on :
-    https://airbnb-information-visualisation-g6-2025.onrender.com
+https://airbnb-information-visualisation-g6-2025.onrender.com
 
 ## Data : 
 
