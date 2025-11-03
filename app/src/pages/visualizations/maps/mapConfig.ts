@@ -1,5 +1,5 @@
 export const MAP_CONFIG = {
-  DEBUG_LOG: true,
+  DEBUG_LOG: false,
   defaultWidth: 960,
   defaultHeight: 600,
   projection: {
