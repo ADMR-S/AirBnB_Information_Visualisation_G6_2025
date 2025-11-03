@@ -8,6 +8,7 @@ import { useFilterStore } from '../../../stores/useFilterStore';
 import { createProjection, createNullProjectionPath } from './mapUtils';
 import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap, renderSizeLegend, renderColorLegend, renderReviewsLegend } from './mapRenderers';
 import { renderFisheyeListings, applyFisheyeToBasemap, restoreBasemapPaths, getFisheyeRadius, updateSelectedListing, renderHostProperties } from './fisheyeUtils';
+import { buildListingSpatialIndex } from './spatialIndex';
 import { MAP_CONFIG } from './mapConfig';
 import { throttleRAF } from '../../../utils/throttle';
 import ListingDetails from '../../../components/ListingDetails';
@@ -39,6 +40,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
   const maxCityCountRef = useRef<number>(0);
   const filteredDataRef = useRef<AirbnbListing[]>([]);
   const projectionRef = useRef<d3.GeoProjection | null>(null);
+  const spatialIndexRef = useRef<ReturnType<typeof buildListingSpatialIndex> | null>(null);
   const initializedRef = useRef<boolean>(false);
   const [fisheyeActive, setFisheyeActive] = useState(false);
   const [fisheyePosition, setFisheyePosition] = useState<[number, number]>([0, 0]);
@@ -260,7 +262,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           
           // Re-render fisheye listings with updated zoom
           g.selectAll('.fisheye-listings-group').remove();
-          renderFisheyeListings(g, filteredDataRef.current, projection, fisheyePosition, zoomLevel, setSelectedListingRef.current, selectedListingRef.current, hostListings);
+          renderFisheyeListings(g, filteredDataRef.current, projection, fisheyePosition, zoomLevel, setSelectedListingRef.current, selectedListingRef.current, hostListings, spatialIndexRef.current);
         }
       });
 
@@ -291,7 +293,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           applyFisheyeToBasemap(g, [mouseX, mouseY], fisheyeRadius, originalPathsRef.current);
           
           // Render fisheye listings (this will handle the selected listing and host properties too)
-          renderFisheyeListings(g, filteredDataRef.current, projection, [mouseX, mouseY], currentZoomRef.current, setSelectedListingRef.current, selectedListingRef.current, hostListings);
+          renderFisheyeListings(g, filteredDataRef.current, projection, [mouseX, mouseY], currentZoomRef.current, setSelectedListingRef.current, selectedListingRef.current, hostListings, spatialIndexRef.current);
         } else {
           setFisheyeActive(false);
           restoreBasemapPaths(g, originalPathsRef.current);
@@ -367,6 +369,14 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         });
       }
     });
+
+    // Build spatial index (quadtree) for fast fisheye lookups
+    if (filteredData.length > 0 && projection) {
+      spatialIndexRef.current = buildListingSpatialIndex(filteredData, projection);
+      if (MAP_CONFIG.DEBUG_LOG) {
+        console.log(`[BubbleMap] Built spatial index for ${filteredData.length} listings`);
+      }
+    }
 
     // Log aggregated data
     if (MAP_CONFIG.DEBUG_LOG) {

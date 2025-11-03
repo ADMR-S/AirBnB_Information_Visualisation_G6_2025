@@ -1,6 +1,7 @@
 import * as d3 from 'd3';
 import type { AirbnbListing } from '../../../types/airbnb.types';
 import { MAP_CONFIG } from './mapConfig';
+import { findListingsInRadius, type ProjectedListing } from './spatialIndex';
 
 /**
  * Calculates the fisheye radius based on current zoom level
@@ -359,13 +360,14 @@ function createSelectedListingCircle(
 /**
  * Renders individual listing bubbles within fisheye lens
  * @param container D3 selection of the container element
- * @param listings Array of listings to render
+ * @param listings Array of listings to render (DEPRECATED - use spatialIndex instead)
  * @param projection D3 geo projection
  * @param fisheyeFocus Focus point of the fisheye
  * @param zoomLevel Current zoom level
  * @param onSelect Callback when a listing is selected or cleared
  * @param injectedSelectedListing Optional selected listing from context (when no popup exists)
  * @param hostListings Optional array of host's listings to render as green triangles
+ * @param spatialIndex Optional quadtree spatial index for fast lookups (recommended for performance)
  */
 export function renderFisheyeListings(
   container: d3.Selection<SVGGElement, unknown, null, undefined>,
@@ -375,7 +377,8 @@ export function renderFisheyeListings(
   zoomLevel: number,
   onSelect?: (listing: AirbnbListing | null) => void,
   injectedSelectedListing?: AirbnbListing | null,
-  hostListings?: AirbnbListing[]
+  hostListings?: AirbnbListing[],
+  spatialIndex?: ReturnType<typeof import('./spatialIndex').buildListingSpatialIndex> | null
 ): void {
   // Get currently selected listing ID from popup, or from injected listing
   const selectedListingId = getSelectedListingId() || injectedSelectedListing?.id || null;
@@ -400,22 +403,29 @@ export function renderFisheyeListings(
     .attr('stroke-width', fisheyeStrokeWidth)
     .style('pointer-events', 'none');
   
-  // Project listings and filter those within fisheye radius
-  type ProjectedListing = { listing: AirbnbListing; projected: [number, number] };
-  const projectedListings: ProjectedListing[] = listings
-    .map(listing => {
-      const projected = projection([listing.longitude, listing.latitude]);
-      if (!projected) return null;
-      
-      const dx = projected[0] - fisheyeFocus[0];
-      const dy = projected[1] - fisheyeFocus[1];
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      
-      if (distance > fisheyeRadius) return null;
-      
-      return { listing, projected };
-    })
-    .filter((d): d is ProjectedListing => d !== null);
+  // Find listings within fisheye radius using spatial index (if available) or brute force
+  let projectedListings: ProjectedListing[];
+  
+  if (spatialIndex) {
+    // FAST PATH: Use quadtree for O(log n) lookup
+    projectedListings = findListingsInRadius(spatialIndex, fisheyeFocus, fisheyeRadius);
+  } else {
+    // SLOW PATH: Brute force O(n) - project and filter all listings
+    projectedListings = listings
+      .map(listing => {
+        const projected = projection([listing.longitude, listing.latitude]);
+        if (!projected) return null;
+        
+        const dx = projected[0] - fisheyeFocus[0];
+        const dy = projected[1] - fisheyeFocus[1];
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance > fisheyeRadius) return null;
+        
+        return { listing, x: projected[0], y: projected[1] };
+      })
+      .filter((d): d is ProjectedListing => d !== null);
+  }
   
   // Separate selected and non-selected listings
   const nonSelectedListings = projectedListings.filter(d => d.listing.id !== selectedListingId);
@@ -450,11 +460,11 @@ export function renderFisheyeListings(
     .append('circle')
     .attr('class', 'fisheye-listing')
     .attr('cx', (d: ProjectedListing) => {
-      const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
+      const distorted = fisheye(d.x, d.y, fisheyeFocus, fisheyeRadius);
       return distorted.x;
     })
     .attr('cy', (d: ProjectedListing) => {
-      const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
+      const distorted = fisheye(d.x, d.y, fisheyeFocus, fisheyeRadius);
       return distorted.y;
     })
     .attr('r', listingBubbleRadius)
@@ -490,7 +500,7 @@ export function renderFisheyeListings(
       d3.select(this).style('opacity', 0);
       
       // Create selected listing bubble with fisheye distortion
-      const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
+      const distorted = fisheye(d.x, d.y, fisheyeFocus, fisheyeRadius);
       createSelectedListingCircle(fisheyeGroup, distorted.x, distorted.y, listingBubbleRadius);
     })
     .on('mouseover', function(this: SVGCircleElement) {
@@ -509,8 +519,8 @@ export function renderFisheyeListings(
   if (selectedListingData) {
     // Selected listing is inside fisheye - render with distortion
     const distorted = fisheye(
-      selectedListingData.projected[0], 
-      selectedListingData.projected[1], 
+      selectedListingData.x, 
+      selectedListingData.y, 
       fisheyeFocus, 
       fisheyeRadius
     );
@@ -579,7 +589,7 @@ export function renderFisheyeListings(
     };
     
     // Project all host listings and separate inside/outside fisheye radius
-    type ProjectedHostListing = { listing: AirbnbListing; projected: [number, number]; distance: number };
+    type ProjectedHostListing = { listing: AirbnbListing; x: number; y: number; distance: number };
     const allProjectedHostListings: ProjectedHostListing[] = hostListings
       .map(listing => {
         const projected = projection([listing.longitude, listing.latitude]);
@@ -589,7 +599,7 @@ export function renderFisheyeListings(
         const dy = projected[1] - fisheyeFocus[1];
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        return { listing, projected, distance };
+        return { listing, x: projected[0], y: projected[1], distance };
       })
       .filter((d): d is ProjectedHostListing => d !== null);
     
@@ -598,7 +608,7 @@ export function renderFisheyeListings(
     
     // Render host properties inside fisheye with distortion
     insideFisheye.forEach(d => {
-      const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
+      const distorted = fisheye(d.x, d.y, fisheyeFocus, fisheyeRadius);
       
       fisheyeGroup.append('path')
         .attr('class', 'host-property fisheye-host-property')
@@ -616,7 +626,7 @@ export function renderFisheyeListings(
       fisheyeGroup.append('path')
         .attr('class', 'host-property')
         .attr('d', trianglePath(triangleSize))
-        .attr('transform', `translate(${d.projected[0]}, ${d.projected[1]})`)
+        .attr('transform', `translate(${d.x}, ${d.y})`)
         .attr('fill', '#4CAF50')
         .attr('fill-opacity', 0.9)
         .attr('stroke', '#fff')
