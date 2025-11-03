@@ -12,19 +12,34 @@ import { showTooltip, hideTooltip, updateTooltipPosition } from '../../../utils/
  * @param bubbleData Array of bubble data to render
  * @param maxSizeValue Maximum size value for scaling
  * @param sizeRange Tuple of [min, max] bubble radius sizes
+ * @param globalMinPrice Optional global minimum price for consistent color scale
+ * @param globalMaxPrice Optional global maximum price for consistent color scale
  */
 export function makeBubbles(
   container: d3.Selection<SVGSVGElement | SVGGElement, unknown, null, undefined>,
   projection: d3.GeoProjection,
   bubbleData: BubbleData[],
   maxSizeValue: number,
-  sizeRange: [number, number] = MAP_CONFIG.bubbles.neighborhoodSizeRange
+  sizeRange: [number, number] = MAP_CONFIG.bubbles.neighborhoodSizeRange,
+  globalMinPrice?: number,
+  globalMaxPrice?: number
 ) {
   // Create scales
   const radiusScale = createRadiusScale(maxSizeValue, sizeRange);
-  const prices = bubbleData.map(d => d.colorValue);
-  const minPrice = d3.min(prices) || 0;
-  const maxPrice = d3.max(prices) || 1;
+  
+  // Use global prices if provided, otherwise calculate from current bubble data
+  let minPrice: number;
+  let maxPrice: number;
+  
+  if (globalMinPrice !== undefined && globalMaxPrice !== undefined) {
+    minPrice = globalMinPrice;
+    maxPrice = globalMaxPrice;
+  } else {
+    const prices = bubbleData.map(d => d.colorValue);
+    minPrice = d3.min(prices) || 0;
+    maxPrice = d3.max(prices) || 1;
+  }
+  
   const colorScale = d3.scaleSequential(d3.interpolateRdYlGn).domain([maxPrice, minPrice]);
 
   // Pre-project all coordinates for performance

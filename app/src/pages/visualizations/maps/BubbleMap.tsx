@@ -73,6 +73,20 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
   // Aggregate data at the component level (must be called at top level, not inside useEffect)
   const { cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount } = useAggregatedData(filteredData);
 
+  // Calculate min/max prices from the currently displayed city bubbles for the color scale
+  const { minCityPrice, maxCityPrice } = useMemo(() => {
+    if (!cityBubbles || cityBubbles.length === 0) {
+      return { minCityPrice: 0, maxCityPrice: 1 };
+    }
+    
+    const cityPrices = cityBubbles.map(b => b.colorValue);
+    
+    return {
+      minCityPrice: d3.min(cityPrices) || 0,
+      maxCityPrice: d3.max(cityPrices) || 1
+    };
+  }, [cityBubbles]);
+
   // Keep refs in sync with filtered data and aggregated data
   useEffect(() => {
     filteredDataRef.current = filteredData;
@@ -171,7 +185,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           console.log(`[BubbleMap] Rendering CITY bubbles (zoom < ${MAP_CONFIG.zoom.cityThreshold})`);
         }
         // Show cities as bubbles
-        makeBubbles(g, projection, currentCityBubbles, currentMaxCityCount, MAP_CONFIG.bubbles.citySizeRange);
+        makeBubbles(g, projection, currentCityBubbles, currentMaxCityCount, MAP_CONFIG.bubbles.citySizeRange, minCityPrice, maxCityPrice);
         // Show selected listing AFTER city bubbles so it appears on top
         updateSelectedListing(g, currentFilteredData, projection, zoomLevel, selectedListingRef.current);
         // Show host properties as green triangles (for host persona)
@@ -217,9 +231,6 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           // Update legends when crossing zoom threshold (use refs for current data)
           const currentFilteredData = filteredDataRef.current;
           const currentMaxCityCount = maxCityCountRef.current;
-          const prices = currentFilteredData.map(d => d.price);
-          const minPrice = d3.min(prices) || 0;
-          const maxPrice = d3.max(prices) || 1;
           const reviews = currentFilteredData.map(d => d.number_of_reviews);
           const minReviews = d3.min(reviews) || 0;
           const maxReviews = d3.max(reviews) || 1;
@@ -227,7 +238,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
             // City level: show city bubble size legend and price legend
             renderSizeLegend(svg, width, height, currentMaxCityCount, MAP_CONFIG.bubbles.citySizeRange);
-            renderColorLegend(svg, width, height, minPrice, maxPrice);
+            renderColorLegend(svg, width, height, minCityPrice, maxCityPrice);
             svg.selectAll('.reviews-legend').remove();
           } else {
             // Neighborhood level: show only reviews legend (size and price legends hidden)
@@ -399,7 +410,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         if (MAP_CONFIG.DEBUG_LOG) {
           console.log(`[BubbleMap] Rendering CITY bubbles (zoom < ${MAP_CONFIG.zoom.cityThreshold})`);
         }
-        makeBubbles(g, projection, cityBubbles, maxCityCount, MAP_CONFIG.bubbles.citySizeRange);
+        makeBubbles(g, projection, cityBubbles, maxCityCount, MAP_CONFIG.bubbles.citySizeRange, minCityPrice, maxCityPrice);
         // Show selected listing AFTER city bubbles so it appears on top
         updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
         // Show host properties as green triangles (for host persona)
@@ -439,10 +450,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
     const height = MAP_CONFIG.defaultHeight;
     const svg = d3.select(svgRef.current);
 
-    // Calculate min and max prices and reviews from filtered data
-    const prices = filteredData.map(d => d.price);
-    const minPrice = d3.min(prices) || 0;
-    const maxPrice = d3.max(prices) || 1;
+    // Calculate min and max reviews from filtered data
     const reviews = filteredData.map(d => d.number_of_reviews);
     const minReviews = d3.min(reviews) || 0;
     const maxReviews = d3.max(reviews) || 1;
@@ -453,7 +461,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
     if (currentZoom < MAP_CONFIG.zoom.cityThreshold) {
       // City level: show city bubble size legend and price legend
       renderSizeLegend(svg, width, height, maxCityCount, MAP_CONFIG.bubbles.citySizeRange);
-      renderColorLegend(svg, width, height, minPrice, maxPrice);
+      renderColorLegend(svg, width, height, minCityPrice, maxCityPrice);
       svg.selectAll('.reviews-legend').remove();
     } else {
       // Neighborhood level: show only reviews legend (size and price legends hidden)
