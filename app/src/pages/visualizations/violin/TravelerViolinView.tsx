@@ -201,6 +201,7 @@ export default function TravelerViolinView() {
           if (!rep.data) return;
           const price = rep.data.price;
           const cy = y(Math.log10(price));
+          const repData = rep.data; // Store in local variable for type safety in closures
 
           g.append('circle')
             .attr('cx', 0)
@@ -210,15 +211,15 @@ export default function TravelerViolinView() {
             .attr('stroke', '#fff')
             .attr('stroke-width', 1.5)
             .style('cursor', 'pointer')
-            .on('mouseover', event => {
+            .on('mouseover', () => {
               tooltip.style('opacity', 1)
                 .html(`
                   <strong>${rep.type}</strong><br/>
-                  City: ${rep.data.city || '—'}<br/>
-                  Host: ${rep.data.host_name || '—'}<br/>
-                  Price: $${rep.data.price.toFixed(0)}<br/>
-                  Reviews: ${rep.data.number_of_reviews ?? 0}<br/>
-                  Availability: ${rep.data.availability_365 ?? 0} days/yr
+                  City: ${repData.city || '—'}<br/>
+                  Host: ${repData.host_name || '—'}<br/>
+                  Price: $${repData.price.toFixed(0)}<br/>
+                  Reviews: ${repData.number_of_reviews ?? 0}<br/>
+                  Availability: ${repData.availability_365 ?? 0} days/yr
                 `);
             })
             .on('mousemove', (event: MouseEvent) => {
@@ -423,6 +424,7 @@ reps.forEach(rep => {
   if (!rep.data) return;
   const price = rep.data.price;
   const cy = y(Math.log10(price));
+  const repData = rep.data; // Store in local variable for type safety in closures
 
   g.append('circle')
     .attr('cx', 0)
@@ -432,15 +434,15 @@ reps.forEach(rep => {
     .attr('stroke', '#fff')
     .attr('stroke-width', 1.5)
     .style('cursor', 'pointer')
-    .on('mouseover', event => {
+    .on('mouseover', () => {
       tooltip.style('opacity', 1)
         .html(`
           <strong>${rep.type}</strong><br/>
-          City: ${rep.data.city || '—'}<br/>
-          Host: ${rep.data.host_name || '—'}<br/>
-          Price: $${rep.data.price.toFixed(0)}<br/>
-          Reviews: ${rep.data.number_of_reviews ?? 0}<br/>
-          Availability: ${rep.data.availability_365 ?? 0} days/yr
+          City: ${repData.city || '—'}<br/>
+          Host: ${repData.host_name || '—'}<br/>
+          Price: $${repData.price.toFixed(0)}<br/>
+          Reviews: ${repData.number_of_reviews ?? 0}<br/>
+          Availability: ${repData.availability_365 ?? 0} days/yr
         `);
     })
     .on('mousemove', (event: MouseEvent) => {
