@@ -1,5 +1,5 @@
 export const MAP_CONFIG = {
-  DEBUG_LOG: true,
+  DEBUG_LOG: false,
   defaultWidth: 960,
   defaultHeight: 600,
   projection: {
@@ -31,7 +31,7 @@ export const MAP_CONFIG = {
     baseRadius: 75, // Base radius at zoom level 1
     baseStrokeWidth: 2, // Base stroke width at zoom level 1
     radiusScaleFactor: 0.5, // How much radius scales with zoom (radius = baseRadius / (zoom * factor))
-    distortion: 2, // Magnification factor (higher = stronger distortion)
+    distortion: 1.25, // Magnification factor (higher = stronger distortion)
     listingBubbleRadius: 2, // Size of individual listing bubbles
     enabled: true
   }

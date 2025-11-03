@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useFilterStore } from '../stores/useFilterStore';
 import { getUniqueStates, getUniqueCities, getUniqueRoomTypes, getUniqueNeighbourhoods } from '../utils/dataLoader';
+import { debounce } from '../utils/throttle';
 import './FilterBar.css';
 
 const MultiSelect = ({ label, value, options, onChange, showDropdown, setShowDropdown }: any) => {
@@ -81,6 +82,32 @@ export default function FilterBar() {
   const [availableNeighbourhoods, setAvailableNeighbourhoods] = useState<string[]>([]);
   const [availableRoomTypes, setAvailableRoomTypes] = useState<string[]>([]);
 
+  // Create debounced versions of the filter setters (0.8 second delay)
+  const debouncedSetPriceRange = useMemo(() => debounce(setPriceRange, 800), [setPriceRange]);
+  const debouncedSetReviewRange = useMemo(() => debounce(setReviewRange, 800), [setReviewRange]);
+  const debouncedSetAvailabilityRange = useMemo(() => debounce(setAvailabilityRange, 800), [setAvailabilityRange]);
+  const debouncedSetMinNightsRange = useMemo(() => debounce(setMinNightsRange, 800), [setMinNightsRange]);
+  const debouncedSetReviewsPerMonthRange = useMemo(() => debounce(setReviewsPerMonthRange, 800), [setReviewsPerMonthRange]);
+  const debouncedSetHostListingsRange = useMemo(() => debounce(setHostListingsRange, 800), [setHostListingsRange]);
+
+  // Local state for immediate UI updates (before debounce)
+  const [localPriceRange, setLocalPriceRange] = useState(priceRange);
+  const [localReviewRange, setLocalReviewRange] = useState(reviewRange);
+  const [localAvailabilityRange, setLocalAvailabilityRange] = useState(availabilityRange);
+  const [localMinNightsRange, setLocalMinNightsRange] = useState(minNightsRange);
+  const [localReviewsPerMonthRange, setLocalReviewsPerMonthRange] = useState(reviewsPerMonthRange);
+  const [localHostListingsRange, setLocalHostListingsRange] = useState(hostListingsRange);
+
+  // Sync local state with store state when filters are reset
+  useEffect(() => {
+    setLocalPriceRange(priceRange);
+    setLocalReviewRange(reviewRange);
+    setLocalAvailabilityRange(availabilityRange);
+    setLocalMinNightsRange(minNightsRange);
+    setLocalReviewsPerMonthRange(reviewsPerMonthRange);
+    setLocalHostListingsRange(hostListingsRange);
+  }, [priceRange, reviewRange, availabilityRange, minNightsRange, reviewsPerMonthRange, hostListingsRange]);
+
   useEffect(() => {
     if (allData.length > 0 && availableStates.length === 0) {
       setAvailableStates(getUniqueStates(allData));
@@ -114,19 +141,77 @@ export default function FilterBar() {
 
         <div className="filter-section">
           <MultiSelect label="States" value={states} options={availableStates} onChange={(s: string) => toggleItem(states, s, setStates)} showDropdown={showStateDropdown} setShowDropdown={setShowStateDropdown} />
-          <MultiSelect label="Cities" value={cities} options={availableCities.slice(0, 20)} onChange={(c: string) => toggleItem(cities, c, setCities)} showDropdown={showCityDropdown} setShowDropdown={setShowCityDropdown} />
-          <MultiSelect label="Neighbourhoods" value={neighbourhoods} options={availableNeighbourhoods.slice(0, 50)} onChange={(n: string) => toggleItem(neighbourhoods, n, setNeighbourhoods)} showDropdown={showNeighbourhoodDropdown} setShowDropdown={setShowNeighbourhoodDropdown} />
+          <MultiSelect label="Cities" value={cities} options={availableCities} onChange={(c: string) => toggleItem(cities, c, setCities)} showDropdown={showCityDropdown} setShowDropdown={setShowCityDropdown} />
+          <MultiSelect label="Neighbourhoods" value={neighbourhoods} options={availableNeighbourhoods} onChange={(n: string) => toggleItem(neighbourhoods, n, setNeighbourhoods)} showDropdown={showNeighbourhoodDropdown} setShowDropdown={setShowNeighbourhoodDropdown} />
           <MultiSelect label="Room Types" value={roomTypes} options={availableRoomTypes} onChange={(rt: string) => toggleItem(roomTypes, rt, setRoomTypes)} showDropdown={showRoomTypeDropdown} setShowDropdown={setShowRoomTypeDropdown} />
         </div>
 
         <div className="filter-section">
-          <RangeFilter label="Price Range" range={priceRange} setRange={setPriceRange} max="50000" prefix="$" defaultRange={[0, 5000]} />
-          <RangeFilter label="Reviews" range={reviewRange} setRange={setReviewRange} max="10000" defaultRange={[0, 1000]} />
-          <RangeFilter label="Availability" range={availabilityRange} setRange={setAvailabilityRange} max="365" defaultRange={[0, 365]} />
-          <RangeFilter label="Minimum Nights" range={minNightsRange} setRange={setMinNightsRange} min="1" max="365" defaultRange={[1, 365]} />
-          <RangeFilter label="Reviews/Month" range={reviewsPerMonthRange} setRange={setReviewsPerMonthRange} max="100" step="0.1" defaultRange={[0, 50]} />
+          <RangeFilter 
+            label="Price Range" 
+            range={localPriceRange} 
+            setRange={(newRange: [number, number]) => {
+              setLocalPriceRange(newRange);
+              debouncedSetPriceRange(newRange);
+            }} 
+            max="50000" 
+            prefix="$" 
+            defaultRange={[0, 5000]} 
+          />
+          <RangeFilter 
+            label="Reviews" 
+            range={localReviewRange} 
+            setRange={(newRange: [number, number]) => {
+              setLocalReviewRange(newRange);
+              debouncedSetReviewRange(newRange);
+            }} 
+            max="10000" 
+            defaultRange={[0, 1000]} 
+          />
+          <RangeFilter 
+            label="Availability" 
+            range={localAvailabilityRange} 
+            setRange={(newRange: [number, number]) => {
+              setLocalAvailabilityRange(newRange);
+              debouncedSetAvailabilityRange(newRange);
+            }} 
+            max="365" 
+            defaultRange={[0, 365]} 
+          />
+          <RangeFilter 
+            label="Minimum Nights" 
+            range={localMinNightsRange} 
+            setRange={(newRange: [number, number]) => {
+              setLocalMinNightsRange(newRange);
+              debouncedSetMinNightsRange(newRange);
+            }} 
+            min="1" 
+            max="365" 
+            defaultRange={[1, 365]} 
+          />
+          <RangeFilter 
+            label="Reviews/Month" 
+            range={localReviewsPerMonthRange} 
+            setRange={(newRange: [number, number]) => {
+              setLocalReviewsPerMonthRange(newRange);
+              debouncedSetReviewsPerMonthRange(newRange);
+            }} 
+            max="100" 
+            step="0.1" 
+            defaultRange={[0, 50]} 
+          />
           {!isTraveler && (
-            <RangeFilter label="Host Listings" range={hostListingsRange} setRange={setHostListingsRange} min="1" max="1000" defaultRange={[1, 500]} />
+            <RangeFilter 
+              label="Host Listings" 
+              range={localHostListingsRange} 
+              setRange={(newRange: [number, number]) => {
+                setLocalHostListingsRange(newRange);
+                debouncedSetHostListingsRange(newRange);
+              }} 
+              min="1" 
+              max="1000" 
+              defaultRange={[1, 500]} 
+            />
           )}
         </div>
 

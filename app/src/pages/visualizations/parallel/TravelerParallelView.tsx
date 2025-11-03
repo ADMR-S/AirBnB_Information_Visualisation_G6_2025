@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useMemo, useState } from 'react';
 import * as d3 from 'd3';
 import { useFilterStore } from '../../../stores/useFilterStore';
 import { useFilteredData } from '../../../hooks/useFilteredData';
+import { useSelectedListing } from '../../../contexts/SelectedListingContext';
 import type { AirbnbListing } from '../../../types/airbnb.types';
 import '../VisualizationPage.css';
 import './parallel.css';
@@ -21,6 +22,7 @@ const DIMENSIONS: { key: keyof AirbnbListing; label: string }[] = [
 export default function TravelerParallelView() {
   const { isLoading, roomTypes: activeRoomTypes, setRoomTypes } = useFilterStore();
   const filteredData = useFilteredData();
+  const { selectedListing, setSelectedListing } = useSelectedListing();
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null); 
@@ -30,7 +32,6 @@ export default function TravelerParallelView() {
   
   const [sortColumn, setSortColumn] = useState<keyof AirbnbListing | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
-  const [selectedListing, setSelectedListing] = useState<AirbnbListing | null>(null);
 
   const handleSort = (column: keyof AirbnbListing) => {
     if (sortColumn !== column) {

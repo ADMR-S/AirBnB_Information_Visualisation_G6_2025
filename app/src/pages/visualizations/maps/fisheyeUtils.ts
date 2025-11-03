@@ -1,6 +1,7 @@
 import * as d3 from 'd3';
 import type { AirbnbListing } from '../../../types/airbnb.types';
 import { MAP_CONFIG } from './mapConfig';
+import { findListingsInRadius, type ProjectedListing } from './spatialIndex';
 
 /**
  * Calculates the fisheye radius based on current zoom level
@@ -193,8 +194,9 @@ export function updateSelectedListing(
   }
   
   if (!selectedListing) {
-    // No selection, remove any selected listing bubble
+    // No selection, remove any selected listing bubble and center circle
     container.selectAll('.selected-listing').remove();
+    container.selectAll('.selected-listing-center').remove();
     return;
   }
   
@@ -202,6 +204,7 @@ export function updateSelectedListing(
   const projected = projection([selectedListing.longitude, selectedListing.latitude]);
   if (!projected) {
     container.selectAll('.selected-listing').remove();
+    container.selectAll('.selected-listing-center').remove();
     return;
   }
   
@@ -230,10 +233,6 @@ export function updateSelectedListing(
   if (selectedBubble.empty()) {
     selectedBubble = fisheyeGroup.append('circle')
       .attr('class', 'fisheye-listing selected-listing')
-      .attr('fill', '#FF5722')
-      .attr('fill-opacity', 0.9)
-      .attr('stroke', '#000')
-      .attr('stroke-width', 0.1)
       .style('cursor', 'pointer')
       .style('pointer-events', 'none');
   }
@@ -241,7 +240,25 @@ export function updateSelectedListing(
   selectedBubble
     .attr('cx', projected[0])
     .attr('cy', projected[1])
-    .attr('r', listingBubbleRadius);
+    .attr('r', listingBubbleRadius)
+    .attr('fill', '#e803dc')
+    .attr('fill-opacity', 0.9)
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 0.02);
+  
+  // Add a small black circle in the center (about 25% of the size)
+  let centerCircle = fisheyeGroup.select<SVGCircleElement>('.selected-listing-center');
+  if (centerCircle.empty()) {
+    centerCircle = fisheyeGroup.append('circle')
+      .attr('class', 'selected-listing-center')
+      .attr('fill', '#000')
+      .style('pointer-events', 'none');
+  }
+  
+  centerCircle
+    .attr('cx', projected[0])
+    .attr('cy', projected[1])
+    .attr('r', listingBubbleRadius * 0.25);
 }
 
 /**
@@ -254,7 +271,6 @@ export function updateSelectedListing(
  */
 export function renderHostProperties(
   container: d3.Selection<SVGGElement, unknown, null, undefined>,
-  listings: AirbnbListing[],
   hostListings: AirbnbListing[],
   projection: d3.GeoProjection,
   zoomLevel: number
@@ -303,7 +319,7 @@ export function renderHostProperties(
       .attr('class', 'host-property')
       .attr('d', trianglePath(triangleSize))
       .attr('transform', `translate(${projected[0]}, ${projected[1]})`)
-      .attr('fill', '#4CAF50')
+      .attr('fill', '#2196F3')
       .attr('fill-opacity', 0.9)
       .attr('stroke', '#fff')
       .attr('stroke-width', triangleStrokeWidth)
@@ -319,17 +335,25 @@ function createSelectedListingCircle(
   x: number,
   y: number,
   radius: number,
-  strokeWidth: number
 ): void {
   group.append('circle')
     .attr('class', 'fisheye-listing selected-listing')
     .attr('cx', x)
     .attr('cy', y)
     .attr('r', radius)
-    .attr('fill', '#FF5722')
+    .attr('fill', '#e803dc')
     .attr('fill-opacity', 0.9)
-    .attr('stroke', '#000')
-    .attr('stroke-width', strokeWidth)
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 0.02)
+    .style('pointer-events', 'none');
+  
+  // Add a small black circle in the center (about 25% of the size)
+  group.append('circle')
+    .attr('class', 'selected-listing-center')
+    .attr('cx', x)
+    .attr('cy', y)
+    .attr('r', radius * 0.25)
+    .attr('fill', '#000')
     .style('pointer-events', 'none');
 }
 
@@ -343,6 +367,7 @@ function createSelectedListingCircle(
  * @param onSelect Callback when a listing is selected or cleared
  * @param injectedSelectedListing Optional selected listing from context (when no popup exists)
  * @param hostListings Optional array of host's listings to render as green triangles
+ * @param spatialIndex Optional quadtree spatial index for fast lookups (recommended for performance)
  */
 export function renderFisheyeListings(
   container: d3.Selection<SVGGElement, unknown, null, undefined>,
@@ -352,7 +377,8 @@ export function renderFisheyeListings(
   zoomLevel: number,
   onSelect?: (listing: AirbnbListing | null) => void,
   injectedSelectedListing?: AirbnbListing | null,
-  hostListings?: AirbnbListing[]
+  hostListings?: AirbnbListing[],
+  spatialIndex?: ReturnType<typeof import('./spatialIndex').buildListingSpatialIndex> | null
 ): void {
   // Get currently selected listing ID from popup, or from injected listing
   const selectedListingId = getSelectedListingId() || injectedSelectedListing?.id || null;
@@ -377,22 +403,29 @@ export function renderFisheyeListings(
     .attr('stroke-width', fisheyeStrokeWidth)
     .style('pointer-events', 'none');
   
-  // Project listings and filter those within fisheye radius
-  type ProjectedListing = { listing: AirbnbListing; projected: [number, number] };
-  const projectedListings: ProjectedListing[] = listings
-    .map(listing => {
-      const projected = projection([listing.longitude, listing.latitude]);
-      if (!projected) return null;
-      
-      const dx = projected[0] - fisheyeFocus[0];
-      const dy = projected[1] - fisheyeFocus[1];
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      
-      if (distance > fisheyeRadius) return null;
-      
-      return { listing, projected };
-    })
-    .filter((d): d is ProjectedListing => d !== null);
+  // Find listings within fisheye radius using spatial index (if available) or brute force
+  let projectedListings: ProjectedListing[];
+  
+  if (spatialIndex) {
+    // FAST PATH: Use quadtree for O(log n) lookup
+    projectedListings = findListingsInRadius(spatialIndex, fisheyeFocus, fisheyeRadius);
+  } else {
+    // SLOW PATH: Brute force O(n) - project and filter all listings
+    projectedListings = listings
+      .map(listing => {
+        const projected = projection([listing.longitude, listing.latitude]);
+        if (!projected) return null;
+        
+        const dx = projected[0] - fisheyeFocus[0];
+        const dy = projected[1] - fisheyeFocus[1];
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance > fisheyeRadius) return null;
+        
+        return { listing, x: projected[0], y: projected[1] };
+      })
+      .filter((d): d is ProjectedListing => d !== null);
+  }
   
   // Separate selected and non-selected listings
   const nonSelectedListings = projectedListings.filter(d => d.listing.id !== selectedListingId);
@@ -406,6 +439,19 @@ export function renderFisheyeListings(
     fisheyeGroup = container.append('g').attr('class', 'fisheye-listings-group');
   }
   
+  // Create color scale for listing reviews (medium blue to dark blue)
+  // Use a square root scale to make differences more noticeable at lower values
+  const reviewCounts = listings.map(d => d.number_of_reviews);
+  const minReviews = d3.min(reviewCounts) || 0;
+  const maxReviews = d3.max(reviewCounts) || 1;
+  // Use scaleSqrt instead of scaleLinear for better visual distinction at lower values
+  const colorScale = d3.scaleSqrt()
+    .domain([minReviews, maxReviews])
+    .range([0.3, 1.0]) // Map to color interpolation range
+    .clamp(true);
+  
+  const getColor = (reviews: number) => d3.interpolateBlues(colorScale(reviews));
+  
   // Render non-selected listing bubbles
   fisheyeGroup
     .selectAll<SVGCircleElement, ProjectedListing>('circle.fisheye-listing:not(.selected-listing)')
@@ -414,15 +460,15 @@ export function renderFisheyeListings(
     .append('circle')
     .attr('class', 'fisheye-listing')
     .attr('cx', (d: ProjectedListing) => {
-      const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
+      const distorted = fisheye(d.x, d.y, fisheyeFocus, fisheyeRadius);
       return distorted.x;
     })
     .attr('cy', (d: ProjectedListing) => {
-      const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
+      const distorted = fisheye(d.x, d.y, fisheyeFocus, fisheyeRadius);
       return distorted.y;
     })
     .attr('r', listingBubbleRadius)
-    .attr('fill', '#2196F3')
+    .attr('fill', (d: ProjectedListing) => getColor(d.listing.number_of_reviews))
     .attr('fill-opacity', 0.7)
     .attr('stroke', '#fff')
     .attr('stroke-width', 0.02)
@@ -432,7 +478,7 @@ export function renderFisheyeListings(
       
       // Reset hover state on the clicked bubble
       d3.select(this)
-        .attr('fill', '#2196F3')
+        .attr('fill', getColor(d.listing.number_of_reviews))
         .attr('r', listingBubbleRadius);
       
       const rect = (event.target as SVGCircleElement).getBoundingClientRect();
@@ -446,24 +492,25 @@ export function renderFisheyeListings(
         onSelect
       );
       
-      // Remove old selected listing and create new one
+      // Remove old selected listing and center circle and create new one
       fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing').remove();
+      fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing-center').remove();
       
       // Hide the clicked bubble by making it invisible
       d3.select(this).style('opacity', 0);
       
       // Create selected listing bubble with fisheye distortion
-      const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
-      createSelectedListingCircle(fisheyeGroup, distorted.x, distorted.y, listingBubbleRadius, fisheyeStrokeWidth);
+      const distorted = fisheye(d.x, d.y, fisheyeFocus, fisheyeRadius);
+      createSelectedListingCircle(fisheyeGroup, distorted.x, distorted.y, listingBubbleRadius);
     })
     .on('mouseover', function(this: SVGCircleElement) {
       d3.select(this)
-        .attr('fill', '#FF5722')
+        .attr('fill', '#e803dc')
         .attr('r', listingBubbleRadius * 1.5);
     })
-    .on('mouseout', function(this: SVGCircleElement) {
+    .on('mouseout', function(this: SVGCircleElement, _event: unknown, d: ProjectedListing) {
       d3.select(this)
-        .attr('fill', '#2196F3')
+        .attr('fill', getColor(d.listing.number_of_reviews))
         .attr('r', listingBubbleRadius);
     });
   
@@ -472,17 +519,18 @@ export function renderFisheyeListings(
   if (selectedListingData) {
     // Selected listing is inside fisheye - render with distortion
     const distorted = fisheye(
-      selectedListingData.projected[0], 
-      selectedListingData.projected[1], 
+      selectedListingData.x, 
+      selectedListingData.y, 
       fisheyeFocus, 
       fisheyeRadius
     );
     
-    // Remove any existing selected listing
+    // Remove any existing selected listing and center circle
     fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing').remove();
+    fisheyeGroup.selectAll<SVGCircleElement, unknown>('.selected-listing-center').remove();
     
     // Create selected listing bubble with fisheye distortion
-    createSelectedListingCircle(fisheyeGroup, distorted.x, distorted.y, listingBubbleRadius, fisheyeStrokeWidth);
+    createSelectedListingCircle(fisheyeGroup, distorted.x, distorted.y, listingBubbleRadius);
   } else if (selectedListingId) {
     // Selected listing exists but is outside fisheye - keep it at original position
     const selectedListing = listings.find(l => l.id === selectedListingId);
@@ -495,10 +543,6 @@ export function renderFisheyeListings(
         if (selectedBubble.empty()) {
           selectedBubble = fisheyeGroup.append('circle')
             .attr('class', 'fisheye-listing selected-listing')
-            .attr('fill', '#FF5722')
-            .attr('fill-opacity', 0.9)
-            .attr('stroke', '#000')
-            .attr('stroke-width', 0.1)
             .style('pointer-events', 'none');
         }
         
@@ -506,7 +550,25 @@ export function renderFisheyeListings(
         selectedBubble
           .attr('cx', projected[0])
           .attr('cy', projected[1])
-          .attr('r', listingBubbleRadius);
+          .attr('r', listingBubbleRadius)
+          .attr('fill', '#e803dc')
+          .attr('fill-opacity', 0.9)
+          .attr('stroke', '#fff')
+          .attr('stroke-width', 0.02);
+        
+        // Add a small black circle in the center (about 25% of the size)
+        let centerCircle = fisheyeGroup.select<SVGCircleElement>('.selected-listing-center');
+        if (centerCircle.empty()) {
+          centerCircle = fisheyeGroup.append('circle')
+            .attr('class', 'selected-listing-center')
+            .attr('fill', '#000')
+            .style('pointer-events', 'none');
+        }
+        
+        centerCircle
+          .attr('cx', projected[0])
+          .attr('cy', projected[1])
+          .attr('r', listingBubbleRadius * 0.25);
       }
     }
   }
@@ -527,7 +589,7 @@ export function renderFisheyeListings(
     };
     
     // Project all host listings and separate inside/outside fisheye radius
-    type ProjectedHostListing = { listing: AirbnbListing; projected: [number, number]; distance: number };
+    type ProjectedHostListing = { listing: AirbnbListing; x: number; y: number; distance: number };
     const allProjectedHostListings: ProjectedHostListing[] = hostListings
       .map(listing => {
         const projected = projection([listing.longitude, listing.latitude]);
@@ -537,7 +599,7 @@ export function renderFisheyeListings(
         const dy = projected[1] - fisheyeFocus[1];
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        return { listing, projected, distance };
+        return { listing, x: projected[0], y: projected[1], distance };
       })
       .filter((d): d is ProjectedHostListing => d !== null);
     
@@ -546,13 +608,13 @@ export function renderFisheyeListings(
     
     // Render host properties inside fisheye with distortion
     insideFisheye.forEach(d => {
-      const distorted = fisheye(d.projected[0], d.projected[1], fisheyeFocus, fisheyeRadius);
+      const distorted = fisheye(d.x, d.y, fisheyeFocus, fisheyeRadius);
       
       fisheyeGroup.append('path')
         .attr('class', 'host-property fisheye-host-property')
         .attr('d', trianglePath(triangleSize))
         .attr('transform', `translate(${distorted.x}, ${distorted.y})`)
-        .attr('fill', '#4CAF50')
+        .attr('fill', '#2196F3')
         .attr('fill-opacity', 0.9)
         .attr('stroke', '#fff')
         .attr('stroke-width', triangleStrokeWidth)
@@ -564,8 +626,8 @@ export function renderFisheyeListings(
       fisheyeGroup.append('path')
         .attr('class', 'host-property')
         .attr('d', trianglePath(triangleSize))
-        .attr('transform', `translate(${d.projected[0]}, ${d.projected[1]})`)
-        .attr('fill', '#4CAF50')
+        .attr('transform', `translate(${d.x}, ${d.y})`)
+        .attr('fill', '#2196F3')
         .attr('fill-opacity', 0.9)
         .attr('stroke', '#fff')
         .attr('stroke-width', triangleStrokeWidth)

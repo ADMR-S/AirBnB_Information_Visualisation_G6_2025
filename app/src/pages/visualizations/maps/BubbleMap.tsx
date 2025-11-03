@@ -6,9 +6,11 @@ import { useSelectedListing } from '../../../contexts/SelectedListingContext';
 import { useHostSelection } from '../../../contexts/HostSelectionContext';
 import { useFilterStore } from '../../../stores/useFilterStore';
 import { createProjection, createNullProjectionPath } from './mapUtils';
-import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap } from './mapRenderers';
+import { makeBubbles, makeNeighborhoodFields, makeCityBoundaries, renderBaseMap, renderSizeLegend, renderColorLegend, renderReviewsLegend } from './mapRenderers';
 import { renderFisheyeListings, applyFisheyeToBasemap, restoreBasemapPaths, getFisheyeRadius, updateSelectedListing, renderHostProperties } from './fisheyeUtils';
+import { buildListingSpatialIndex } from './spatialIndex';
 import { MAP_CONFIG } from './mapConfig';
+import { throttleRAF } from '../../../utils/throttle';
 import ListingDetails from '../../../components/ListingDetails';
 import '../VisualizationPage.css';
 import './BubbleMap.css';
@@ -25,13 +27,20 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
   const { allData } = useFilterStore();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const maxCityCountRef = useRef<number>(0);
   const currentZoomRef = useRef<number>(1);
   const currentTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const originalPathsRef = useRef<Map<SVGPathElement | SVGPolygonElement, string>>(new Map());
   const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  
+  // Refs to hold current aggregated data so zoom handler always uses latest values
+  const cityBubblesRef = useRef<any[]>([]);
+  const neighborhoodFieldsRef = useRef<any[]>([]);
+  const cityBoundariesRef = useRef<any[]>([]);
+  const maxCityCountRef = useRef<number>(0);
+  const filteredDataRef = useRef<AirbnbListing[]>([]);
   const projectionRef = useRef<d3.GeoProjection | null>(null);
+  const spatialIndexRef = useRef<ReturnType<typeof buildListingSpatialIndex> | null>(null);
   const initializedRef = useRef<boolean>(false);
   const [fisheyeActive, setFisheyeActive] = useState(false);
   const [fisheyePosition, setFisheyePosition] = useState<[number, number]>([0, 0]);
@@ -64,6 +73,29 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
   // Aggregate data at the component level (must be called at top level, not inside useEffect)
   const { cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount } = useAggregatedData(filteredData);
 
+  // Calculate min/max prices from the currently displayed city bubbles for the color scale
+  const { minCityPrice, maxCityPrice } = useMemo(() => {
+    if (!cityBubbles || cityBubbles.length === 0) {
+      return { minCityPrice: 0, maxCityPrice: 1 };
+    }
+    
+    const cityPrices = cityBubbles.map(b => b.colorValue);
+    
+    return {
+      minCityPrice: d3.min(cityPrices) || 0,
+      maxCityPrice: d3.max(cityPrices) || 1
+    };
+  }, [cityBubbles]);
+
+  // Keep refs in sync with filtered data and aggregated data
+  useEffect(() => {
+    filteredDataRef.current = filteredData;
+    cityBubblesRef.current = cityBubbles;
+    neighborhoodFieldsRef.current = neighborhoodFields;
+    cityBoundariesRef.current = cityBoundaries;
+    maxCityCountRef.current = maxCityCount;
+  }, [filteredData, cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount]);
+
   // Handle injected listing (from context or props)
   useEffect(() => {
     if (injectedListing) {
@@ -82,8 +114,9 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
     if (selectedListing && !fisheyeActive) {
       updateSelectedListing(gRef.current, filteredData, projectionRef.current, zoomLevel, selectedListing);
     } else if (!selectedListing) {
-      // No selection - remove the selected listing pin
+      // No selection - remove the selected listing pin and center circle
       gRef.current.selectAll('.selected-listing').remove();
+      gRef.current.selectAll('.selected-listing-center').remove();
     }
   }, [selectedListing, fisheyeActive, filteredData]); // Depend on fisheyeActive too
 
@@ -140,29 +173,36 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
       g.selectAll('.neighborhood-fields').remove();
       g.selectAll('.city-boundaries').remove();
 
+      // Use refs to get current values (not closure values)
+      const currentCityBubbles = cityBubblesRef.current;
+      const currentMaxCityCount = maxCityCountRef.current;
+      const currentNeighborhoodFields = neighborhoodFieldsRef.current;
+      const currentCityBoundaries = cityBoundariesRef.current;
+      const currentFilteredData = filteredDataRef.current;
+
       if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
         if (MAP_CONFIG.DEBUG_LOG) {
           console.log(`[BubbleMap] Rendering CITY bubbles (zoom < ${MAP_CONFIG.zoom.cityThreshold})`);
         }
         // Show cities as bubbles
-        makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
+        makeBubbles(g, projection, currentCityBubbles, currentMaxCityCount, MAP_CONFIG.bubbles.citySizeRange, minCityPrice, maxCityPrice);
         // Show selected listing AFTER city bubbles so it appears on top
-        updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
+        updateSelectedListing(g, currentFilteredData, projection, zoomLevel, selectedListingRef.current);
         // Show host properties as green triangles (for host persona)
         if (hostListings.length > 0) {
-          renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+          renderHostProperties(g, hostListings, projection, zoomLevel);
         }
       } else {
         if (MAP_CONFIG.DEBUG_LOG) {
           console.log(`[BubbleMap] Rendering NEIGHBORHOOD fields (zoom >= ${MAP_CONFIG.zoom.cityThreshold})`);
         }
         // Show city boundaries first (behind neighborhoods)
-        makeCityBoundaries(g, projection, cityBoundaries);
+        makeCityBoundaries(g, projection, currentCityBoundaries);
         // Then show neighborhoods as fields
-        makeNeighborhoodFields(g, projection, neighborhoodFields);
+        makeNeighborhoodFields(g, projection, currentNeighborhoodFields);
         // Show host properties as green triangles (for host persona)
         if (hostListings.length > 0) {
-          renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+          renderHostProperties(g, hostListings, projection, zoomLevel);
         }
       }
     }
@@ -188,6 +228,25 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           
           renderVisualization(zoomLevel);
           
+          // Update legends when crossing zoom threshold (use refs for current data)
+          const currentFilteredData = filteredDataRef.current;
+          const currentMaxCityCount = maxCityCountRef.current;
+          const reviews = currentFilteredData.map(d => d.number_of_reviews);
+          const minReviews = d3.min(reviews) || 0;
+          const maxReviews = d3.max(reviews) || 1;
+          
+          if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
+            // City level: show city bubble size legend and price legend
+            renderSizeLegend(svg, width, height, currentMaxCityCount, MAP_CONFIG.bubbles.citySizeRange);
+            renderColorLegend(svg, width, height, minCityPrice, maxCityPrice);
+            svg.selectAll('.reviews-legend').remove();
+          } else {
+            // Neighborhood level: show only reviews legend (size and price legends hidden)
+            renderReviewsLegend(svg, width, height, minReviews, maxReviews);
+            svg.selectAll('.color-legend').remove();
+            svg.selectAll('.size-legend').remove();
+          }
+          
           // Clean up fisheye elements when zooming out to city level
           if (zoomLevel < MAP_CONFIG.zoom.cityThreshold) {
             // Remove fisheye-specific elements but keep selected listing
@@ -196,11 +255,11 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
             restoreBasemapPaths(g, originalPathsRef.current);
             setFisheyeActive(false);
             // Update selected listing for city level (will be drawn on top of city bubbles)
-            updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
+            updateSelectedListing(g, currentFilteredData, projection, zoomLevel, selectedListingRef.current);
           } else {
             // Zoomed into neighborhood level - show selected listing if any
             if (!fisheyeActive) {
-              updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
+              updateSelectedListing(g, filteredDataRef.current, projection, zoomLevel, selectedListingRef.current);
             }
           }
         }
@@ -214,7 +273,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           
           // Re-render fisheye listings with updated zoom
           g.selectAll('.fisheye-listings-group').remove();
-          renderFisheyeListings(g, filteredData, projection, fisheyePosition, zoomLevel, setSelectedListingRef.current, selectedListingRef.current, hostListings);
+          renderFisheyeListings(g, filteredDataRef.current, projection, fisheyePosition, zoomLevel, setSelectedListingRef.current, selectedListingRef.current, hostListings, spatialIndexRef.current);
         }
       });
 
@@ -223,7 +282,9 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
 
     // Add fisheye interaction (only at neighborhood zoom level)
     if (MAP_CONFIG.fisheye.enabled) {
-      svg.on('mousemove', function(event: MouseEvent) {
+      // Create throttled handler with 32ms delay (~30fps updates instead of 60fps)
+      // Increase to 50ms for ~20fps or 100ms for ~10fps if you want even less frequent updates
+      const throttledMouseMove = throttleRAF(function(event: MouseEvent) {
         // Don't activate fisheye if mouse is over a popup
         const target = event.target as HTMLElement;
         if (target.closest('.listing-popup')) {
@@ -243,7 +304,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           applyFisheyeToBasemap(g, [mouseX, mouseY], fisheyeRadius, originalPathsRef.current);
           
           // Render fisheye listings (this will handle the selected listing and host properties too)
-          renderFisheyeListings(g, filteredData, projection, [mouseX, mouseY], currentZoomRef.current, setSelectedListingRef.current, selectedListingRef.current, hostListings);
+          renderFisheyeListings(g, filteredDataRef.current, projection, [mouseX, mouseY], currentZoomRef.current, setSelectedListingRef.current, selectedListingRef.current, hostListings, spatialIndexRef.current);
         } else {
           setFisheyeActive(false);
           restoreBasemapPaths(g, originalPathsRef.current);
@@ -251,7 +312,9 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
           g.selectAll('.fisheye-listing:not(.selected-listing)').remove();
           g.selectAll('.fisheye-lens-circle').remove();
         }
-      });
+      }, 32); // 32ms delay = ~30fps (increase to 50 for ~20fps, or 100 for ~10fps)
+      
+      svg.on('mousemove', throttledMouseMove);
       
       svg.on('mouseleave', function() {
         setFisheyeActive(false);
@@ -263,10 +326,10 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         // Update selected listing position without fisheye distortion
         const zoomLevel = currentZoomRef.current;
         if (zoomLevel >= MAP_CONFIG.zoom.cityThreshold) {
-          updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
+          updateSelectedListing(g, filteredDataRef.current, projection, zoomLevel, selectedListingRef.current);
           // Re-render host properties after fisheye deactivation
           if (hostListings.length > 0) {
-            renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+            renderHostProperties(g, hostListings, projection, zoomLevel);
           }
         }
       });
@@ -318,15 +381,18 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
       }
     });
 
+    // Build spatial index (quadtree) for fast fisheye lookups
+    if (filteredData.length > 0 && projection) {
+      spatialIndexRef.current = buildListingSpatialIndex(filteredData, projection);
+      if (MAP_CONFIG.DEBUG_LOG) {
+        console.log(`[BubbleMap] Built spatial index for ${filteredData.length} listings`);
+      }
+    }
+
     // Log aggregated data
     if (MAP_CONFIG.DEBUG_LOG) {
       console.log(`[BubbleMap] Data update - Processing ${filteredData.length} listings`);
       console.log(`[BubbleMap] Aggregated to ${cityBubbles.length} cities, ${neighborhoodFields.length} neighborhoods, ${cityBoundaries.length} city boundaries`);
-    }
-    
-    // Update max for consistent scaling
-    if (maxCityCount > maxCityCountRef.current) {
-      maxCityCountRef.current = maxCityCount;
     }
 
     // Function to render based on zoom level
@@ -344,12 +410,12 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         if (MAP_CONFIG.DEBUG_LOG) {
           console.log(`[BubbleMap] Rendering CITY bubbles (zoom < ${MAP_CONFIG.zoom.cityThreshold})`);
         }
-        makeBubbles(g, projection, cityBubbles, maxCityCountRef.current, MAP_CONFIG.bubbles.citySizeRange);
+        makeBubbles(g, projection, cityBubbles, maxCityCount, MAP_CONFIG.bubbles.citySizeRange, minCityPrice, maxCityPrice);
         // Show selected listing AFTER city bubbles so it appears on top
         updateSelectedListing(g, filteredData, projection, zoomLevel, selectedListingRef.current);
         // Show host properties as green triangles (for host persona)
         if (hostListings.length > 0) {
-          renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+          renderHostProperties(g, hostListings, projection, zoomLevel);
         }
       } else {
         if (MAP_CONFIG.DEBUG_LOG) {
@@ -359,7 +425,7 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
         makeNeighborhoodFields(g, projection, neighborhoodFields);
         // Show host properties as green triangles (for host persona)
         if (hostListings.length > 0) {
-          renderHostProperties(g, filteredData, hostListings, projection, zoomLevel);
+          renderHostProperties(g, hostListings, projection, zoomLevel);
         }
       }
     }
@@ -374,6 +440,36 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
       svg.call(zoomBehaviorRef.current.transform, currentTransformRef.current);
     }
   }, [filteredData, cityBubbles, neighborhoodFields, cityBoundaries, maxCityCount, hostListings]);
+
+  // Legend rendering effect - updates when data changes
+  useEffect(() => {
+    if (!svgRef.current || !containerRef.current || filteredData.length === 0) return;
+
+    const container = containerRef.current;
+    const width = container.clientWidth || MAP_CONFIG.defaultWidth;
+    const height = MAP_CONFIG.defaultHeight;
+    const svg = d3.select(svgRef.current);
+
+    // Calculate min and max reviews from filtered data
+    const reviews = filteredData.map(d => d.number_of_reviews);
+    const minReviews = d3.min(reviews) || 0;
+    const maxReviews = d3.max(reviews) || 1;
+
+    // Render legends based on current zoom level
+    const currentZoom = currentZoomRef.current;
+    
+    if (currentZoom < MAP_CONFIG.zoom.cityThreshold) {
+      // City level: show city bubble size legend and price legend
+      renderSizeLegend(svg, width, height, maxCityCount, MAP_CONFIG.bubbles.citySizeRange);
+      renderColorLegend(svg, width, height, minCityPrice, maxCityPrice);
+      svg.selectAll('.reviews-legend').remove();
+    } else {
+      // Neighborhood level: show only reviews legend (size and price legends hidden)
+      renderReviewsLegend(svg, width, height, minReviews, maxReviews);
+      svg.selectAll('.color-legend').remove();
+      svg.selectAll('.size-legend').remove();
+    }
+  }, [filteredData, neighborhoodFields, maxCityCount]);
 
   function handleZoomIn() {
     if (!svgRef.current || !zoomBehaviorRef.current) return;
@@ -434,9 +530,10 @@ export default function BubbleMap({ filteredData, persona, isLoading, injectedLi
             if (popup) {
               popup.remove();
             }
-            // Remove selected listing visualization
+            // Remove selected listing visualization and center circle
             if (gRef.current) {
               gRef.current.selectAll('.selected-listing').remove();
+              gRef.current.selectAll('.selected-listing-center').remove();
             }
           }}
         />

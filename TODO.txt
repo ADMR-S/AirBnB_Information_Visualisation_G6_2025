@@ -9,25 +9,18 @@ Rapport
 Si on se chauffe : base de donnée en ligne pour données dynamiques mais probablement pas
 
 MAP
-    Cercles : taille en fonction des coordonnées max
     optimiser
-    3 niveaux de zoom : US/state with cities et county/neighborhood
 
     Localiser les offres MAP
     Suivre la densité concurrentielle MAP + Field, 
     Voir ses propres logements et les offres alentours sur la carte MAP 
         Forme + couleur
-
-    ZIP Codes Austin et Asheville 
-
-    pop up ne se ferme pas en changeant d'écran
-
-
-    légende
+        
     afficher propriétés host dans listing
     listings superposés (afficher on long hover)
-    Couleurs champs neighborhood, bulles et city
     formes
     Add to favorites (stars)
     "Show on map" button
     Bouton activation/désactivation fisheye
+    enrich with more data (google maps)
+    Intermediate aggregation level (by neighborhoods with neighborhood sized-lens)

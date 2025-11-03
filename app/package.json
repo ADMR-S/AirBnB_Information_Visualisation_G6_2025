@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.52.5",
     "@types/d3": "^7.4.3",
     "@types/topojson-client": "^3.1.5",
     "d3": "^7.9.0",
