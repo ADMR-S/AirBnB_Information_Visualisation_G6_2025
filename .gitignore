@@ -181,7 +181,7 @@ cython_debug/
 *.jpeg
 *.gif
 *.svg
-*.pdf
+#*.pdf
 plots/
 figures/
 output/
